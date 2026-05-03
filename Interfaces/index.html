@@ -6,64 +6,58 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="login-container">
+    <div class="login-container"> 
         <div class="login-box">
             <h2>Iniciar Sesión</h2>
-            <input type="text" id="usuario" placeholder="Usuario">
+
+            <input type="email" id="usuario" placeholder="Correo">
             <input type="password" id="contrasena" placeholder="Contraseña">
+
             <button onclick="login()">Entrar</button>
-            <p id="mensaje" style="color:red; margin-top:10px;"></p>
+
+            <p id="error" style="color:red;"></p>
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-            projectId: "proyecto-integrador-77c49",
-            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-            messagingSenderId: "1074040277954",
-            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-        };
+// 🔴 PEGA TU CONFIG REAL AQUÍ - YA ESTA PEGADA
+const firebaseConfig = {
+    apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+    authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+    projectId: "proyecto-integrador-77c49",
+    storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+    messagingSenderId: "1074040277954",
+    appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+  };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-        window.login = async function() {
-            const usuario = document.getElementById("usuario").value.trim();
-            const contrasena = document.getElementById("contrasena").value.trim();
-            const mensaje = document.getElementById("mensaje");
+// 🔥 FUNCIÓN LOGIN REAL
+window.login = async function() {
 
-            if (!usuario || !contrasena) {
-                mensaje.textContent = "Por favor llena todos los campos.";
-                return;
-            }
+    const email = document.getElementById("usuario").value;
+    const password = document.getElementById("contrasena").value;
+    const errorText = document.getElementById("error");
 
-            try {
-                const querySnapshot = await getDocs(collection(db, "usuarios"));
-                let encontrado = false;
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
 
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.usuario === usuario && data.contrasena === contrasena) {
-                        encontrado = true;
-                        localStorage.setItem("usuarioActivo", usuario);
-                        localStorage.setItem("rol", data.rol);
-                        window.location.href = "dashboard.html";
-                    }
-                });
+        // ✅ LOGIN CORRECTO
+        window.location.href = "dashboard.html";
 
-                if (!encontrado) {
-                    mensaje.textContent = "Usuario o contraseña incorrectos.";
-                }
-            } catch (error) {
-                mensaje.textContent = "Error al conectar con la base de datos.";
-                console.error(error);
-            }
-        }
-    </script>
-</body>
+    } catch (error) {
+        errorText.textContent = "Usuario o contraseña incorrectos";
+    }
+}
+</script>
+
+</body> 
 </html>
