@@ -27,11 +27,7 @@
                     <h3>Nueva Cita</h3>
                     <input type="date" id="fecha" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <input type="text" id="equipo" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
-                    <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;">
-                        <option value="Pendiente">Pendiente</option>
-                        <option value="Completada">Completada</option>
-                        <option value="Cancelada">Cancelada</option>
-                    </select><br>
+
                     <button class="btn" onclick="agregarCita()" style="margin-top: 10px;">Guardar</button>
                     <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                     <p id="mensajeCita" style="color: green;"></p>
@@ -50,6 +46,7 @@
             </div>
         </div>
     </div>
+    
     <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getFirestore, collection, getDocs, addDoc, doc, updateDoc } 
@@ -116,7 +113,6 @@ window.agregarCita = async function() {
     const select = document.getElementById("equipo");
     const equipoId = select.value;
     const equipoNombre = select.options[select.selectedIndex].text;
-    const estado = document.getElementById("estado").value;
 
     if (!fecha || !equipoId) {
         alert("Completa todos los campos");
@@ -127,9 +123,10 @@ window.agregarCita = async function() {
         fecha,
         equipo_id: equipoId,
         equipo_nombre: equipoNombre,
-        estado
+        estado: "pendiente" // 🔥 SIEMPRE INICIA ASÍ
     });
 
+    alert("Cita creada");
     cargarCitas();
 }
 
