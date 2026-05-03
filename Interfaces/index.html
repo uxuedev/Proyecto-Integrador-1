@@ -6,13 +6,58 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="login-container">
+    <div class="login-container"> 
         <div class="login-box">
             <h2>Iniciar Sesión</h2>
-            <input type="text" placeholder="Usuario">
-            <input type="password" placeholder="Contraseña">
-            <button onclick="window.location.href='dashboard.html'">Entrar</button>
+
+            <input type="email" id="usuario" placeholder="Correo">
+            <input type="password" id="contrasena" placeholder="Contraseña">
+
+            <button onclick="login()">Entrar</button>
+
+            <p id="error" style="color:red;"></p>
         </div>
     </div>
-</body>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// 🔴 PEGA TU CONFIG REAL AQUÍ - YA ESTA PEGADA
+const firebaseConfig = {
+    apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+    authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+    projectId: "proyecto-integrador-77c49",
+    storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+    messagingSenderId: "1074040277954",
+    appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+  };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// 🔥 FUNCIÓN LOGIN REAL
+window.login = async function() {
+
+    const email = document.getElementById("usuario").value;
+    const password = document.getElementById("contrasena").value;
+    const errorText = document.getElementById("error");
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+
+        // ✅ LOGIN CORRECTO
+        window.location.href = "dashboard.html";
+
+    } catch (error) {
+        errorText.textContent = "Usuario o contraseña incorrectos";
+    }
+}
+</script>
+
+</body> 
 </html>
