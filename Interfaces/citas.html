@@ -50,67 +50,127 @@
             </div>
         </div>
     </div>
-
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, collection, getDocs, addDoc, doc, updateDoc } 
+from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-            projectId: "proyecto-integrador-77c49",
-            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-            messagingSenderId: "1074040277954",
-            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-        };
+const firebaseConfig = {
+    apiKey: "AIza...",
+    authDomain: "...",
+    projectId: "..."
+};
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-        // Cargar citas
-        async function cargarCitas() {
-            const tbody = document.getElementById("tablaCitas");
-            tbody.innerHTML = "";
-            const snap = await getDocs(collection(db, "citas"));
-            if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='3'>No hay citas registradas.</td></tr>";
-                return;
-            }
-            snap.forEach(doc => {
-                const d = doc.data();
-                tbody.innerHTML += `<tr>
-                    <td>${d.fecha}</td>
-                    <td>${d.equipo}</td>
-                    <td>${d.estado}</td>
-                </tr>`;
-            });
-        }
+let citaEditando = null;
 
-        // Agregar cita
-        window.agregarCita = async function() {
-            const fecha = document.getElementById("fecha").value;
-            const equipo = document.getElementById("equipo").value.trim();
-            const estado = document.getElementById("estado").value;
-            const mensaje = document.getElementById("mensajeCita");
+// 🔽 CARGAR EQUIPOS EN SELECT
+async function cargarEquipos() {
+    const select = document.getElementById("equipo");
+    select.innerHTML = "<option value=''>Selecciona equipo</option>";
 
-            if (!fecha || !equipo) {
-                mensaje.style.color = "red";
-                mensaje.textContent = "Por favor completa todos los campos.";
-                return;
-            }
+    const snap = await getDocs(collection(db, "equipos"));
 
-            await addDoc(collection(db, "citas"), { fecha, equipo, estado });
-            mensaje.style.color = "green";
-            mensaje.textContent = "Cita agendada exitosamente.";
-            document.getElementById("fecha").value = "";
-            document.getElementById("equipo").value = "";
-            cargarCitas();
-        }
+    snap.forEach(docSnap => {
+        const data = docSnap.data();
+        select.innerHTML += `<option value="${docSnap.id}">
+            ${data.nombre}
+        </option>`;
+    });
+}
 
-        window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
-        window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+// 📋 CARGAR CITAS
+async function cargarCitas() {
+    const tbody = document.getElementById("tablaCitas");
+    tbody.innerHTML = "";
 
-        cargarCitas();
-    </script>
+    const snap = await getDocs(collection(db, "citas"));
+
+    if (snap.empty) {
+        tbody.innerHTML = "<tr><td colspan='4'>No hay citas registradas.</td></tr>";
+        return;
+    }
+
+    snap.forEach(docSnap => {
+        const d = docSnap.data();
+
+        tbody.innerHTML += `
+        <tr>
+            <td>${d.fecha}</td>
+            <td>${d.equipo_nombre}</td>
+            <td>${d.estado}</td>
+            <td>
+                <button onclick="abrirEdicion('${docSnap.id}', '${d.fecha}', '${d.estado}')">
+                    Editar
+                </button>
+            </td>
+        </tr>`;
+    });
+}
+
+// ➕ AGREGAR CITA
+window.agregarCita = async function() {
+    const fecha = document.getElementById("fecha").value;
+    const select = document.getElementById("equipo");
+    const equipoId = select.value;
+    const equipoNombre = select.options[select.selectedIndex].text;
+    const estado = document.getElementById("estado").value;
+
+    if (!fecha || !equipoId) {
+        alert("Completa todos los campos");
+        return;
+    }
+
+    await addDoc(collection(db, "citas"), {
+        fecha,
+        equipo_id: equipoId,
+        equipo_nombre: equipoNombre,
+        estado
+    });
+
+    cargarCitas();
+}
+
+// ✏️ ABRIR FORM EDITAR
+window.abrirEdicion = function(id, fecha, estado) {
+    citaEditando = id;
+
+    document.getElementById("editFecha").value = fecha;
+    document.getElementById("editEstado").value = estado;
+
+    document.getElementById("formEditar").style.display = "block";
+}
+
+// 💾 GUARDAR CAMBIOS
+window.guardarEdicion = async function() {
+    const nuevaFecha = document.getElementById("editFecha").value;
+    const nuevoEstado = document.getElementById("editEstado").value;
+
+    if (!nuevaFecha) return;
+
+    await updateDoc(doc(db, "citas", citaEditando), {
+        fecha: nuevaFecha,
+        estado: nuevoEstado
+    });
+
+    cerrarEdicion();
+    cargarCitas();
+}
+
+// ❌ CERRAR EDIT
+window.cerrarEdicion = function() {
+    document.getElementById("formEditar").style.display = "none";
+}
+
+// UI
+window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
+window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+
+// 🔥 INICIO
+cargarEquipos();
+cargarCitas();
+</script>
 </body>
 </html>
