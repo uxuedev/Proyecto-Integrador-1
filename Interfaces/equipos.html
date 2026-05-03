@@ -20,7 +20,28 @@
         <div class="main">
             <div class="card">
                 <h2>Gestión de Equipos</h2>
-                <button class="btn">Agregar Equipo</button>
+                <button class="btn" onclick="mostrarFormulario()">Agregar Equipo</button>
+
+                <!-- Formulario nuevo equipo -->
+                <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3>Nuevo Equipo</h3>
+                    <input type="text" id="nombre" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <select id="tipo" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Desktop">Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Servidor">Servidor</option>
+                        <option value="Impresora">Impresora</option>
+                    </select><br>
+                    <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Activo">Activo</option>
+                        <option value="Inactivo">Inactivo</option>
+                        <option value="En reparación">En reparación</option>
+                    </select><br>
+                    <button class="btn" onclick="agregarEquipo()" style="margin-top: 10px;">Guardar</button>
+                    <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                    <p id="mensajeEquipo" style="color: green;"></p>
+                </div>
+
                 <table>
                     <tr>
                         <th>ID</th>
@@ -28,15 +49,75 @@
                         <th>Tipo</th>
                         <th>Estado</th>
                     </tr>
-                    <tr>
-                        <td>1</td>
-                        <td>PC Oficina</td>
-                        <td>Desktop</td>
-                        <td>Activo</td>
-                    </tr>
+                    <tbody id="tablaEquipos">
+                        <tr><td colspan="4">Cargando...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+            projectId: "proyecto-integrador-77c49",
+            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+            messagingSenderId: "1074040277954",
+            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Cargar equipos
+        async function cargarEquipos() {
+            const tbody = document.getElementById("tablaEquipos");
+            tbody.innerHTML = "";
+            const snap = await getDocs(collection(db, "equipos"));
+            if (snap.empty) {
+                tbody.innerHTML = "<tr><td colspan='4'>No hay equipos registrados.</td></tr>";
+                return;
+            }
+            let i = 1;
+            snap.forEach(doc => {
+                const d = doc.data();
+                tbody.innerHTML += `<tr>
+                    <td>${i++}</td>
+                    <td>${d.nombre}</td>
+                    <td>${d.tipo}</td>
+                    <td>${d.estado}</td>
+                </tr>`;
+            });
+        }
+
+        // Agregar equipo
+        window.agregarEquipo = async function() {
+            const nombre = document.getElementById("nombre").value.trim();
+            const tipo = document.getElementById("tipo").value;
+            const estado = document.getElementById("estado").value;
+            const mensaje = document.getElementById("mensajeEquipo");
+
+            if (!nombre) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Por favor ingresa el nombre del equipo.";
+                return;
+            }
+
+            await addDoc(collection(db, "equipos"), { nombre, tipo, estado });
+            mensaje.style.color = "green";
+            mensaje.textContent = "Equipo agregado exitosamente.";
+            document.getElementById("nombre").value = "";
+            cargarEquipos();
+        }
+
+        window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
+        window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+
+        cargarEquipos();
+    </script>
 </body>
 </html>

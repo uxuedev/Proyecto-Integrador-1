@@ -21,11 +21,41 @@
             <div class="card">
                 <h2>Dashboard</h2>
                 <p>Resumen general del sistema</p>
-                <div class="card">Equipos registrados: 120</div>
-                <div class="card">Citas hoy: 8</div>
-                <div class="card">Mantenimientos pendientes: 15</div>
+                <div class="card">Equipos registrados: <span id="totalEquipos">Cargando...</span></div>
+                <div class="card">Citas hoy: <span id="citasHoy">Cargando...</span></div>
+                <div class="card">Mantenimientos pendientes: <span id="mantenimientosPendientes">Cargando...</span></div>
             </div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+            projectId: "proyecto-integrador-77c49",
+            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+            messagingSenderId: "1074040277954",
+            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Total de equipos
+        const equiposSnap = await getDocs(collection(db, "equipos"));
+        document.getElementById("totalEquipos").textContent = equiposSnap.size;
+
+        // Citas de hoy
+        const hoy = new Date().toISOString().split("T")[0];
+        const citasSnap = await getDocs(query(collection(db, "citas"), where("fecha", "==", hoy)));
+        document.getElementById("citasHoy").textContent = citasSnap.size;
+
+        // Mantenimientos pendientes
+        const pendientesSnap = await getDocs(query(collection(db, "citas"), where("estado", "==", "Pendiente")));
+        document.getElementById("mantenimientosPendientes").textContent = pendientesSnap.size;
+    </script>
 </body>
 </html>

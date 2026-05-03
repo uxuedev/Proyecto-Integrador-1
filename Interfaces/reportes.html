@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <title>Reportes - Sistema de Mantenimiento</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- jsPDF para PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- SheetJS para Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -20,10 +24,145 @@
         <div class="main">
             <div class="card">
                 <h2>Reportes</h2>
-                <button class="btn">Generar Reporte</button>
-                <p>Descarga de reportes en PDF o Excel</p>
+                <p>Selecciona el tipo de reporte y el formato de descarga.</p>
+
+                <select id="tipoReporte" style="padding: 8px; margin: 10px 0; width: 100%;">
+                    <option value="equipos">Equipos</option>
+                    <option value="citas">Citas</option>
+                    <option value="historial">Historial de Mantenimiento</option>
+                    <option value="preventivo">Mantenimiento Preventivo</option>
+                </select>
+
+                <div style="margin-top: 10px;">
+                    <button class="btn" onclick="generarPDF()">Descargar PDF</button>
+                    <button class="btn" onclick="generarExcel()" style="margin-left: 10px;">Descargar Excel</button>
+                </div>
+
+                <p id="mensajeReporte" style="margin-top: 10px; color: green;"></p>
+
+                <!-- Vista previa -->
+                <div id="vistaPrevia" style="margin-top: 20px; display:none;">
+                    <h3 id="tituloPrevia"></h3>
+                    <table id="tablaPrevia">
+                        <thead id="theadPrevia"></thead>
+                        <tbody id="tbodyPrevia"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+            projectId: "proyecto-integrador-77c49",
+            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+            messagingSenderId: "1074040277954",
+            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const columnas = {
+            equipos:    ["nombre", "tipo", "estado"],
+            citas:      ["fecha", "equipo", "estado"],
+            historial:  ["equipo", "falla", "diagnostico", "fecha"],
+            preventivo: ["equipo", "ultimoServicio", "proximoServicio"]
+        };
+
+        const encabezados = {
+            equipos:    ["Nombre", "Tipo", "Estado"],
+            citas:      ["Fecha", "Equipo", "Estado"],
+            historial:  ["Equipo", "Falla", "Diagnóstico", "Fecha"],
+            preventivo: ["Equipo", "Último Servicio", "Próximo Servicio"]
+        };
+
+        async function obtenerDatos() {
+            const tipo = document.getElementById("tipoReporte").value;
+            const snap = await getDocs(collection(db, tipo));
+            const datos = [];
+            snap.forEach(doc => datos.push(doc.data()));
+            return { tipo, datos, cols: columnas[tipo], heads: encabezados[tipo] };
+        }
+
+        function mostrarPrevia(tipo, datos, cols, heads) {
+            const vistaPrevia = document.getElementById("vistaPrevia");
+            document.getElementById("tituloPrevia").textContent = `Vista previa: ${tipo}`;
+            document.getElementById("theadPrevia").innerHTML = `<tr>${heads.map(h => `<th>${h}</th>`).join("")}</tr>`;
+            const tbody = document.getElementById("tbodyPrevia");
+            tbody.innerHTML = "";
+            if (datos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${heads.length}">Sin datos.</td></tr>`;
+            } else {
+                datos.forEach(d => {
+                    tbody.innerHTML += `<tr>${cols.map(c => `<td>${d[c] || ""}</td>`).join("")}</tr>`;
+                });
+            }
+            vistaPrevia.style.display = "block";
+        }
+
+        window.generarPDF = async function() {
+            const mensaje = document.getElementById("mensajeReporte");
+            try {
+                const { tipo, datos, cols, heads } = await obtenerDatos();
+                mostrarPrevia(tipo, datos, cols, heads);
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                doc.setFontSize(14);
+                doc.text(`Reporte: ${tipo.toUpperCase()}`, 14, 15);
+                doc.setFontSize(10);
+
+                let y = 25;
+                // Encabezados
+                heads.forEach((h, i) => doc.text(h, 14 + i * 45, y));
+                y += 7;
+
+                if (datos.length === 0) {
+                    doc.text("Sin datos disponibles.", 14, y);
+                } else {
+                    datos.forEach(d => {
+                        cols.forEach((c, i) => doc.text(String(d[c] || ""), 14 + i * 45, y));
+                        y += 7;
+                        if (y > 280) { doc.addPage(); y = 15; }
+                    });
+                }
+
+                doc.save(`reporte_${tipo}.pdf`);
+                mensaje.style.color = "green";
+                mensaje.textContent = "PDF generado exitosamente.";
+            } catch (e) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Error al generar el PDF.";
+            }
+        }
+
+        window.generarExcel = async function() {
+            const mensaje = document.getElementById("mensajeReporte");
+            try {
+                const { tipo, datos, cols, heads } = await obtenerDatos();
+                mostrarPrevia(tipo, datos, cols, heads);
+
+                const filas = [heads];
+                datos.forEach(d => filas.push(cols.map(c => d[c] || "")));
+
+                const ws = XLSX.utils.aoa_to_sheet(filas);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, tipo);
+                XLSX.writeFile(wb, `reporte_${tipo}.xlsx`);
+
+                mensaje.style.color = "green";
+                mensaje.textContent = "Excel generado exitosamente.";
+            } catch (e) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Error al generar el Excel.";
+            }
+        }
+    </script>
 </body>
 </html>

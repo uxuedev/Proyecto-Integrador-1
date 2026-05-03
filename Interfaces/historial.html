@@ -20,6 +20,20 @@
         <div class="main">
             <div class="card">
                 <h2>Historial de Mantenimiento</h2>
+                <button class="btn" onclick="mostrarFormulario()">Agregar Registro</button>
+
+                <!-- Formulario nuevo registro -->
+                <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3>Nuevo Registro</h3>
+                    <input type="text" id="equipo" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="falla" placeholder="Falla detectada" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="diagnostico" placeholder="Diagnóstico" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="date" id="fecha" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <button class="btn" onclick="agregarRegistro()" style="margin-top: 10px;">Guardar</button>
+                    <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                    <p id="mensajeHistorial" style="color: green;"></p>
+                </div>
+
                 <table>
                     <tr>
                         <th>Equipo</th>
@@ -27,15 +41,78 @@
                         <th>Diagnóstico</th>
                         <th>Fecha</th>
                     </tr>
-                    <tr>
-                        <td>PC Oficina</td>
-                        <td>No enciende</td>
-                        <td>Fuente dañada</td>
-                        <td>01/04/2026</td>
-                    </tr>
+                    <tbody id="tablaHistorial">
+                        <tr><td colspan="4">Cargando...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+            projectId: "proyecto-integrador-77c49",
+            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+            messagingSenderId: "1074040277954",
+            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Cargar historial
+        async function cargarHistorial() {
+            const tbody = document.getElementById("tablaHistorial");
+            tbody.innerHTML = "";
+            const snap = await getDocs(collection(db, "historial"));
+            if (snap.empty) {
+                tbody.innerHTML = "<tr><td colspan='4'>No hay registros en el historial.</td></tr>";
+                return;
+            }
+            snap.forEach(doc => {
+                const d = doc.data();
+                tbody.innerHTML += `<tr>
+                    <td>${d.equipo}</td>
+                    <td>${d.falla}</td>
+                    <td>${d.diagnostico}</td>
+                    <td>${d.fecha}</td>
+                </tr>`;
+            });
+        }
+
+        // Agregar registro
+        window.agregarRegistro = async function() {
+            const equipo = document.getElementById("equipo").value.trim();
+            const falla = document.getElementById("falla").value.trim();
+            const diagnostico = document.getElementById("diagnostico").value.trim();
+            const fecha = document.getElementById("fecha").value;
+            const mensaje = document.getElementById("mensajeHistorial");
+
+            if (!equipo || !falla || !diagnostico || !fecha) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Por favor completa todos los campos.";
+                return;
+            }
+
+            await addDoc(collection(db, "historial"), { equipo, falla, diagnostico, fecha });
+            mensaje.style.color = "green";
+            mensaje.textContent = "Registro guardado correctamente.";
+            document.getElementById("equipo").value = "";
+            document.getElementById("falla").value = "";
+            document.getElementById("diagnostico").value = "";
+            document.getElementById("fecha").value = "";
+            cargarHistorial();
+        }
+
+        window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
+        window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+
+        cargarHistorial();
+    </script>
 </body>
 </html>
