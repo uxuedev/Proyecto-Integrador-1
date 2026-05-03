@@ -26,6 +26,7 @@
                 <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                     <h3>Nuevo Equipo</h3>
                     <input type="text" id="nombre" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="serie" placeholder="Número de serie" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <select id="tipo" style="margin: 5px 0; padding: 8px; width: 100%;">
                         <option value="Desktop">Desktop</option>
                         <option value="Laptop">Laptop</option>
@@ -42,15 +43,37 @@
                     <p id="mensajeEquipo" style="color: green;"></p>
                 </div>
 
+                <!-- Formulario editar equipo -->
+                <div id="formEditar" style="display:none; margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                    <h3>Editar Equipo</h3>
+                    <input type="text" id="editNombre" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="editSerie" placeholder="Número de serie" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <select id="editTipo" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Desktop">Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Servidor">Servidor</option>
+                        <option value="Impresora">Impresora</option>
+                    </select><br>
+                    <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Activo">Activo</option>
+                        <option value="Inactivo">Inactivo</option>
+                        <option value="En reparación">En reparación</option>
+                    </select><br>
+                    <button class="btn" onclick="guardarEdicion()" style="margin-top: 10px;">Guardar cambios</button>
+                    <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                </div>
+
                 <table>
                     <tr>
                         <th>ID</th>
                         <th>Nombre</th>
+                        <th>Serie</th>
                         <th>Tipo</th>
                         <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
                     <tbody id="tablaEquipos">
-                        <tr><td colspan="4">Cargando...</td></tr>
+                        <tr><td colspan="6">Cargando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -59,7 +82,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
+        from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
@@ -73,23 +97,30 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        let equipoEditando = null;
+
         // Cargar equipos
         async function cargarEquipos() {
             const tbody = document.getElementById("tablaEquipos");
             tbody.innerHTML = "";
             const snap = await getDocs(collection(db, "equipos"));
             if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='4'>No hay equipos registrados.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
                 return;
             }
             let i = 1;
-            snap.forEach(doc => {
-                const d = doc.data();
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
                 tbody.innerHTML += `<tr>
                     <td>${i++}</td>
                     <td>${d.nombre}</td>
+                    <td>${d.serie || "-"}</td>
                     <td>${d.tipo}</td>
                     <td>${d.estado}</td>
+                    <td>
+                        <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ""}', '${d.tipo}', '${d.estado}')">Editar</button>
+                        <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
+                    </td>
                 </tr>`;
             });
         }
@@ -97,6 +128,7 @@
         // Agregar equipo
         window.agregarEquipo = async function() {
             const nombre = document.getElementById("nombre").value.trim();
+            const serie = document.getElementById("serie").value.trim();
             const tipo = document.getElementById("tipo").value;
             const estado = document.getElementById("estado").value;
             const mensaje = document.getElementById("mensajeEquipo");
@@ -107,11 +139,45 @@
                 return;
             }
 
-            await addDoc(collection(db, "equipos"), { nombre, tipo, estado });
+            await addDoc(collection(db, "equipos"), { nombre, serie, tipo, estado });
             mensaje.style.color = "green";
             mensaje.textContent = "Equipo agregado exitosamente.";
             document.getElementById("nombre").value = "";
+            document.getElementById("serie").value = "";
             cargarEquipos();
+        }
+
+        // Abrir edición
+        window.abrirEdicion = function(id, nombre, serie, tipo, estado) {
+            equipoEditando = id;
+            document.getElementById("editNombre").value = nombre;
+            document.getElementById("editSerie").value = serie;
+            document.getElementById("editTipo").value = tipo;
+            document.getElementById("editEstado").value = estado;
+            document.getElementById("formEditar").style.display = "block";
+        }
+
+        // Guardar edición
+        window.guardarEdicion = async function() {
+            const nombre = document.getElementById("editNombre").value.trim();
+            const serie = document.getElementById("editSerie").value.trim();
+            const tipo = document.getElementById("editTipo").value;
+            const estado = document.getElementById("editEstado").value;
+            if (!nombre) return;
+            await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado });
+            cerrarEdicion();
+            cargarEquipos();
+        }
+
+        // Eliminar equipo
+        window.eliminarEquipo = async function(id) {
+            if (!confirm("¿Seguro que quieres eliminar este equipo?")) return;
+            await deleteDoc(doc(db, "equipos", id));
+            cargarEquipos();
+        }
+
+        window.cerrarEdicion = function() {
+            document.getElementById("formEditar").style.display = "none";
         }
 
         window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
