@@ -26,11 +26,30 @@
                 <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                     <h3>Nueva Cita</h3>
                     <input type="date" id="fecha" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
-                    <input type="text" id="equipo" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
-
+                    <select id="equipo" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="">Selecciona un equipo</option>
+                    </select><br>
+                    <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Completada">Completada</option>
+                        <option value="Cancelada">Cancelada</option>
+                    </select><br>
                     <button class="btn" onclick="agregarCita()" style="margin-top: 10px;">Guardar</button>
                     <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                     <p id="mensajeCita" style="color: green;"></p>
+                </div>
+
+                <!-- Formulario editar cita -->
+                <div id="formEditar" style="display:none; margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                    <h3>Editar Cita</h3>
+                    <input type="date" id="editFecha" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Completada">Completada</option>
+                        <option value="Cancelada">Cancelada</option>
+                    </select><br>
+                    <button class="btn" onclick="guardarEdicion()" style="margin-top: 10px;">Guardar cambios</button>
+                    <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                 </div>
 
                 <table>
@@ -38,136 +57,135 @@
                         <th>Fecha</th>
                         <th>Equipo</th>
                         <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
                     <tbody id="tablaCitas">
-                        <tr><td colspan="3">Cargando...</td></tr>
+                        <tr><td colspan="4">Cargando...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    
+
     <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, collection, getDocs, addDoc, doc, updateDoc } 
-from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc } 
+        from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-const firebaseConfig = {
-    apiKey: "AIza...",
-    authDomain: "...",
-    projectId: "..."
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+            projectId: "proyecto-integrador-77c49",
+            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+            messagingSenderId: "1074040277954",
+            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+        };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-let citaEditando = null;
+        let citaEditando = null;
 
-// 🔽 CARGAR EQUIPOS EN SELECT
-async function cargarEquipos() {
-    const select = document.getElementById("equipo");
-    select.innerHTML = "<option value=''>Selecciona equipo</option>";
+        // Cargar equipos en el select
+        async function cargarEquipos() {
+            const select = document.getElementById("equipo");
+            select.innerHTML = "<option value=''>Selecciona un equipo</option>";
+            const snap = await getDocs(collection(db, "equipos"));
+            snap.forEach(docSnap => {
+                const data = docSnap.data();
+                select.innerHTML += `<option value="${docSnap.id}">${data.nombre}</option>`;
+            });
+        }
 
-    const snap = await getDocs(collection(db, "equipos"));
+        // Cargar citas
+        async function cargarCitas() {
+            const tbody = document.getElementById("tablaCitas");
+            tbody.innerHTML = "";
+            const snap = await getDocs(collection(db, "citas"));
+            if (snap.empty) {
+                tbody.innerHTML = "<tr><td colspan='4'>No hay citas registradas.</td></tr>";
+                return;
+            }
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                tbody.innerHTML += `<tr>
+                    <td>${d.fecha}</td>
+                    <td>${d.equipo_nombre}</td>
+                    <td>${d.estado}</td>
+                    <td>
+                        <button onclick="abrirEdicion('${docSnap.id}', '${d.fecha}', '${d.estado}')">Editar</button>
+                        <button onclick="eliminarCita('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
+                    </td>
+                </tr>`;
+            });
+        }
 
-    snap.forEach(docSnap => {
-        const data = docSnap.data();
-        select.innerHTML += `<option value="${docSnap.id}">
-            ${data.nombre}
-        </option>`;
-    });
-}
+        // Agregar cita
+        window.agregarCita = async function() {
+            const fecha = document.getElementById("fecha").value;
+            const select = document.getElementById("equipo");
+            const equipoId = select.value;
+            const equipoNombre = select.options[select.selectedIndex].text;
+            const estado = document.getElementById("estado").value;
+            const mensaje = document.getElementById("mensajeCita");
 
-// 📋 CARGAR CITAS
-async function cargarCitas() {
-    const tbody = document.getElementById("tablaCitas");
-    tbody.innerHTML = "";
+            if (!fecha || !equipoId) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Por favor completa todos los campos.";
+                return;
+            }
 
-    const snap = await getDocs(collection(db, "citas"));
+            await addDoc(collection(db, "citas"), {
+                fecha,
+                equipo_id: equipoId,
+                equipo_nombre: equipoNombre,
+                estado
+            });
 
-    if (snap.empty) {
-        tbody.innerHTML = "<tr><td colspan='4'>No hay citas registradas.</td></tr>";
-        return;
-    }
+            mensaje.style.color = "green";
+            mensaje.textContent = "Cita agendada exitosamente.";
+            document.getElementById("fecha").value = "";
+            select.value = "";
+            cargarCitas();
+        }
 
-    snap.forEach(docSnap => {
-        const d = docSnap.data();
+        // Abrir formulario editar
+        window.abrirEdicion = function(id, fecha, estado) {
+            citaEditando = id;
+            document.getElementById("editFecha").value = fecha;
+            document.getElementById("editEstado").value = estado;
+            document.getElementById("formEditar").style.display = "block";
+        }
 
-        tbody.innerHTML += `
-        <tr>
-            <td>${d.fecha}</td>
-            <td>${d.equipo_nombre}</td>
-            <td>${d.estado}</td>
-            <td>
-                <button onclick="abrirEdicion('${docSnap.id}', '${d.fecha}', '${d.estado}')">
-                    Editar
-                </button>
-            </td>
-        </tr>`;
-    });
-}
+        // Guardar edición
+        window.guardarEdicion = async function() {
+            const nuevaFecha = document.getElementById("editFecha").value;
+            const nuevoEstado = document.getElementById("editEstado").value;
+            if (!nuevaFecha) return;
+            await updateDoc(doc(db, "citas", citaEditando), {
+                fecha: nuevaFecha,
+                estado: nuevoEstado
+            });
+            cerrarEdicion();
+            cargarCitas();
+        }
 
-// ➕ AGREGAR CITA
-window.agregarCita = async function() {
-    const fecha = document.getElementById("fecha").value;
-    const select = document.getElementById("equipo");
-    const equipoId = select.value;
-    const equipoNombre = select.options[select.selectedIndex].text;
+        // Eliminar cita
+        window.eliminarCita = async function(id) {
+            if (!confirm("¿Seguro que quieres eliminar esta cita?")) return;
+            await deleteDoc(doc(db, "citas", id));
+            cargarCitas();
+        }
 
-    if (!fecha || !equipoId) {
-        alert("Completa todos los campos");
-        return;
-    }
+        window.cerrarEdicion = function() {
+            document.getElementById("formEditar").style.display = "none";
+        }
 
-    await addDoc(collection(db, "citas"), {
-        fecha,
-        equipo_id: equipoId,
-        equipo_nombre: equipoNombre,
-        estado: "pendiente" // 🔥 SIEMPRE INICIA ASÍ
-    });
+        window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
+        window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
 
-    alert("Cita creada");
-    cargarCitas();
-}
-
-// ✏️ ABRIR FORM EDITAR
-window.abrirEdicion = function(id, fecha, estado) {
-    citaEditando = id;
-
-    document.getElementById("editFecha").value = fecha;
-    document.getElementById("editEstado").value = estado;
-
-    document.getElementById("formEditar").style.display = "block";
-}
-
-// 💾 GUARDAR CAMBIOS
-window.guardarEdicion = async function() {
-    const nuevaFecha = document.getElementById("editFecha").value;
-    const nuevoEstado = document.getElementById("editEstado").value;
-
-    if (!nuevaFecha) return;
-
-    await updateDoc(doc(db, "citas", citaEditando), {
-        fecha: nuevaFecha,
-        estado: nuevoEstado
-    });
-
-    cerrarEdicion();
-    cargarCitas();
-}
-
-// ❌ CERRAR EDIT
-window.cerrarEdicion = function() {
-    document.getElementById("formEditar").style.display = "none";
-}
-
-// UI
-window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
-window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
-
-// 🔥 INICIO
-cargarEquipos();
-cargarCitas();
-</script>
+        cargarEquipos();
+        cargarCitas();
+    </script>
 </body>
 </html>
