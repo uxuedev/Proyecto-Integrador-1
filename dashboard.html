@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - Sistema de Mantenimiento</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Menú</h3>
+            <a></a>
+            <a href="dashboard.html" style="background: var(--secondary);">Dashboard</a>
+            <a href="equipos.html">Equipos</a>
+            <a href="citas.html">Citas</a>
+            <a href="historial.html">Historial</a>
+            <a href="preventivo.html">Preventivo</a>
+            <a href="reportes.html">Reportes</a>
+            <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
+        </div>
+        <div class="main">
+            <div class="card">
+                <h2>Dashboard</h2>
+                <a id="bienvenidaUsuario">Cargando usuario...</a>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p>Equipos registrados</p>
+                        <strong id="totalEquipos">Cargando...</strong>
+                    </div>
+
+                    <div class="stat-card">
+                        <p>Citas hoy</p>
+                        <strong id="citasHoy">Cargando...</strong>
+                    </div>
+
+                    <div class="stat-card">
+                        <p>Total de citas</p>
+                        <strong id="totalCitas">Cargando...</strong>
+                    </div>
+                </div>
+                <div class="panel-citas">
+                    <h3>Próximas citas pendientes</h3>
+                    <div id="proximasCitas">
+                        <p>Cargando citas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, collection, getDocs, query, where } 
+from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+// 🔧 CONFIG
+const firebaseConfig = {
+    apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
+    authDomain: "proyecto-integrador-77c49.firebaseapp.com",
+    projectId: "proyecto-integrador-77c49",
+    storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
+    messagingSenderId: "1074040277954",
+    appId: "1:1074040277954:web:26167a594d0c8159d6245b"
+};
+
+// 🔥 INICIALIZAR (SOLO UNA VEZ)
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 🚀 FUNCIÓN PRINCIPAL
+async function cargarDashboard() {
+
+    try {
+        // 🔹 0. NOMBRE DEL USUARIO
+        const usuariosSnap = await getDocs(collection(db, "usuarios"));
+
+        if (!usuariosSnap.empty) {
+            const usuario = usuariosSnap.docs[0].data();
+            document.getElementById("bienvenidaUsuario").textContent = `Bienvenido, ${usuario.nombre}`;
+        } else {
+            document.getElementById("bienvenidaUsuario").textContent = "Bienvenido";
+        }
+        // 🔹 1. TOTAL EQUIPOS
+        const equiposSnap = await getDocs(collection(db, "equipos"));
+        document.getElementById("totalEquipos").textContent = equiposSnap.size || 0;
+
+        // 🔹 2. CITAS DE HOY
+        const hoy = new Date().toISOString().split("T")[0];
+
+        const citasQuery = query(
+            collection(db, "citas"),
+            where("fecha", "==", hoy)
+        );
+
+        const citasSnap = await getDocs(citasQuery);
+        document.getElementById("citasHoy").textContent = citasSnap.size || 0;
+
+        // 🔹 3. TOTAL DE CITAS
+        const totalCitasSnap = await getDocs(collection(db, "citas"));
+        document.getElementById("totalCitas").textContent = totalCitasSnap.size || 0;
+
+        // 🔹 4. PRÓXIMAS 3 CITAS PENDIENTES
+        const contenedorCitas = document.getElementById("proximasCitas");
+        contenedorCitas.innerHTML = "<p>Cargando citas...</p>";
+
+        const citasPendientesSnap = await getDocs(collection(db, "citas"));
+
+        const proximasCitas = [];
+
+        citasPendientesSnap.forEach((doc) => {
+            const cita = doc.data();
+
+            const estado = (cita.estado || "").toLowerCase();
+            const fecha = cita.fecha || "";
+
+            if (estado === "pendiente" && fecha >= hoy) {
+                proximasCitas.push(cita);
+            }
+        });
+
+        proximasCitas.sort((a, b) => {
+            return String(a.fecha).localeCompare(String(b.fecha));
+        });
+
+        const tresCitas = proximasCitas.slice(0, 3);
+
+        if (tresCitas.length > 0) {
+            contenedorCitas.innerHTML = "";
+
+            tresCitas.forEach((cita) => {
+                contenedorCitas.innerHTML += `
+                    <div class="cita-item">
+                        <strong>${cita.equipo_nombre || "Equipo sin nombre"}</strong>
+                        <span>${cita.fecha || "Sin fecha"}</span>
+                        <small>${cita.estado || "pendiente"}</small>
+                    </div>
+                `;
+            });
+        } else {
+            contenedorCitas.innerHTML = "<p>No hay citas pendientes próximas.</p>";
+        }
+
+    } catch (error) {
+        console.error("Error en dashboard:", error);
+        // fallback en caso de error
+        document.getElementById("totalEquipos").textContent = 0;
+        document.getElementById("citasHoy").textContent = 0;
+        document.getElementById("totalCitas").textContent = 0;
+    }
+}
+
+// 🔥 Ejecutar al cargar
+cargarDashboard();
+</script>
+    
+</body>
+</html>
