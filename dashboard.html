@@ -34,8 +34,8 @@
                     </div>
 
                     <div class="stat-card">
-                        <p>Mantenimientos pendientes</p>
-                        <strong id="mantenimientosPendientes">Cargando...</strong>
+                        <p>Total de citas</p>
+                        <strong id="totalCitas">Cargando...</strong>
                     </div>
                 </div>
                 <div class="panel-citas">
@@ -95,14 +95,9 @@ async function cargarDashboard() {
         const citasSnap = await getDocs(citasQuery);
         document.getElementById("citasHoy").textContent = citasSnap.size || 0;
 
-        // 🔹 3. MANTENIMIENTOS PENDIENTES
-        const mantenimientosQuery = query(
-            collection(db, "mantenimiento_preventivo"),
-            where("estado", "==", "pendiente")
-        );
-
-        const mantSnap = await getDocs(mantenimientosQuery);
-        document.getElementById("mantenimientosPendientes").textContent = mantSnap.size || 0;
+        // 🔹 3. TOTAL DE CITAS
+        const totalCitasSnap = await getDocs(collection(db, "citas"));
+        document.getElementById("totalCitas").textContent = totalCitasSnap.size || 0;
 
         // 🔹 4. PRÓXIMAS 3 CITAS PENDIENTES
         const contenedorCitas = document.getElementById("proximasCitas");
@@ -150,11 +145,11 @@ async function cargarDashboard() {
         // fallback en caso de error
         document.getElementById("totalEquipos").textContent = 0;
         document.getElementById("citasHoy").textContent = 0;
-        document.getElementById("mantenimientosPendientes").textContent = 0;
+        document.getElementById("totalCitas").textContent = 0;
     }
 }
 
-// 🔥 Ejecutar al cargar
+//ejecución
 cargarDashboard();
 </script>
     
