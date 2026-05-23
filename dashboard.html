@@ -53,7 +53,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebas
 import { getFirestore, collection, getDocs, query, where } 
 from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// 🔧 CONFIG
+// CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
     authDomain: "proyecto-integrador-77c49.firebaseapp.com",
@@ -63,11 +63,11 @@ const firebaseConfig = {
     appId: "1:1074040277954:web:26167a594d0c8159d6245b"
 };
 
-// 🔥 INICIALIZAR (SOLO UNA VEZ)
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// 🚀 FUNCIÓN PRINCIPAL
+
 async function cargarDashboard() {
 
     try {
@@ -162,7 +162,7 @@ async function cargarDashboard() {
     }
 }
 
-//ejecución
+//ejecución n
 cargarDashboard();
 </script>
     
