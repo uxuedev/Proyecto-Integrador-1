@@ -34,7 +34,7 @@
                     </div>
 
                     <div class="stat-card">
-                        <p>Total de citas</p>
+                        <p>Total de Servicios</p>
                         <strong id="totalCitas">Cargando...</strong>
                     </div>
                 </div>
@@ -84,20 +84,33 @@ async function cargarDashboard() {
         const equiposSnap = await getDocs(collection(db, "equipos"));
         document.getElementById("totalEquipos").textContent = equiposSnap.size || 0;
 
-        // 🔹 2. CITAS DE HOY
+        // 🔹 2. CITAS Y PREVENTIVOS DE HOY
         const hoy = new Date().toISOString().split("T")[0];
 
-        const citasQuery = query(
+        const citasHoyQuery = query(
             collection(db, "citas"),
             where("fecha", "==", hoy)
         );
 
-        const citasSnap = await getDocs(citasQuery);
-        document.getElementById("citasHoy").textContent = citasSnap.size || 0;
+        const preventivosHoyQuery = query(
+            collection(db, "mantenimiento_preventido"),
+            where("fecha", "==", hoy)
+        );
 
-        // 🔹 3. TOTAL DE CITAS
+        const citasHoySnap = await getDocs(citasHoyQuery);
+        const preventivosHoySnap = await getDocs(preventivosHoyQuery);
+
+        const totalHoy = citasHoySnap.size + preventivosHoySnap.size;
+
+        document.getElementById("citasHoy").textContent = totalHoy || 0;
+
+        // 🔹 3. TOTAL DE CITAS Y PREVENTIVOS
         const totalCitasSnap = await getDocs(collection(db, "citas"));
-        document.getElementById("totalCitas").textContent = totalCitasSnap.size || 0;
+        const totalPreventivosSnap = await getDocs(collection(db, "mantenimiento_preventido"));
+
+        const totalServicios = totalCitasSnap.size + totalPreventivosSnap.size;
+
+        document.getElementById("totalCitas").textContent = totalServicios || 0;
 
         // 🔹 4. PRÓXIMAS 3 CITAS PENDIENTES
         const contenedorCitas = document.getElementById("proximasCitas");
