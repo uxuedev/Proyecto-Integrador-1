@@ -49,13 +49,10 @@
                         <option value="Inactivo">Inactivo</option>
                         <option value="En reparación">En reparación</option>
                     </select><br>
-
-                    <!-- Campos que aparecen solo si está En reparación -->
                     <div id="camposReparacion" style="display:none;">
                         <input type="text" id="falla" placeholder="Falla detectada" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                         <input type="text" id="diagnostico" placeholder="Diagnóstico" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     </div>
-
                     <button class="btn" onclick="agregarEquipo()" style="margin-top: 10px;">Guardar</button>
                     <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                     <p id="mensajeEquipo" style="color: green;"></p>
@@ -77,13 +74,10 @@
                         <option value="Inactivo">Inactivo</option>
                         <option value="En reparación">En reparación</option>
                     </select><br>
-
-                    <!-- Campos falla/diagnostico en edición -->
                     <div id="camposEditReparacion" style="display:none;">
                         <input type="text" id="editFalla" placeholder="Falla detectada" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                         <input type="text" id="editDiagnostico" placeholder="Diagnóstico" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     </div>
-
                     <button class="btn" onclick="guardarEdicion()" style="margin-top: 10px;">Guardar cambios</button>
                     <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                 </div>
@@ -137,19 +131,16 @@
         let equipoEditando = null;
         let estadoAnterior = null;
 
-        // Mostrar/ocultar campos de reparación en formulario nuevo
         window.toggleCamposReparacion = function() {
             const estado = document.getElementById("estado").value;
             document.getElementById("camposReparacion").style.display = estado === "En reparación" ? "block" : "none";
         }
 
-        // Mostrar/ocultar campos de reparación en edición
         window.toggleCamposEditReparacion = function() {
             const estado = document.getElementById("editEstado").value;
             document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
         }
 
-        // Cargar equipos
         async function cargarEquipos() {
             const tbody = document.getElementById("tablaEquipos");
             const filtroTipo = document.getElementById("filtroTipo").value;
@@ -174,7 +165,7 @@
                     <td>${d.tipo}</td>
                     <td><span class="estado estado-${d.estado.replace(/\s+/g, '-').toLowerCase()}">${d.estado}</span></td>
                     <td>
-                        <button onclick="verDetalles('${d.nombre}', '${d.serie || ''}', '${d.tipo}', '${d.estado}', '${falla}', '${diagnostico}')" style="margin-right:4px;">Detalles</button>
+                        <button onclick="verDetalles('${falla}', '${diagnostico}')" style="margin-right:4px;">Detalles</button>
                         <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ''}', '${d.tipo}', '${d.estado}', '${falla}', '${diagnostico}')">Editar</button>
                         <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
                     </td>
@@ -185,8 +176,7 @@
             }
         }
 
-        // Ver detalles
-        window.verDetalles = function(nombre, serie, tipo, estado, falla, diagnostico) {
+        window.verDetalles = function(falla, diagnostico) {
             document.getElementById("detFalla").textContent = falla;
             document.getElementById("detDiagnostico").textContent = diagnostico;
             document.getElementById("modalDetalles").style.display = "flex";
@@ -196,7 +186,6 @@
             document.getElementById("modalDetalles").style.display = "none";
         }
 
-        // Agregar equipo
         window.agregarEquipo = async function() {
             const nombre = document.getElementById("nombre").value.trim();
             const serie = document.getElementById("serie").value.trim();
@@ -205,13 +194,11 @@
             const falla = document.getElementById("falla").value.trim();
             const diagnostico = document.getElementById("diagnostico").value.trim();
             const mensaje = document.getElementById("mensajeEquipo");
-
             if (!nombre) {
                 mensaje.style.color = "red";
                 mensaje.textContent = "Por favor ingresa el nombre del equipo.";
                 return;
             }
-
             await addDoc(collection(db, "equipos"), { nombre, serie, tipo, estado, falla, diagnostico });
             mensaje.style.color = "green";
             mensaje.textContent = "Equipo agregado exitosamente.";
@@ -222,7 +209,6 @@
             cargarEquipos();
         }
 
-        // Abrir edición
         window.abrirEdicion = function(id, nombre, serie, tipo, estado, falla, diagnostico) {
             equipoEditando = id;
             estadoAnterior = estado;
@@ -232,12 +218,10 @@
             document.getElementById("editEstado").value = estado;
             document.getElementById("editFalla").value = falla !== "-" ? falla : "";
             document.getElementById("editDiagnostico").value = diagnostico !== "-" ? diagnostico : "";
-            // Mostrar campos si ya está en reparación
             document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
             document.getElementById("formEditar").style.display = "block";
         }
 
-        // Guardar edición — si cambia a Activo y venía de En reparación → manda a historial
         window.guardarEdicion = async function() {
             const nombre = document.getElementById("editNombre").value.trim();
             const serie = document.getElementById("editSerie").value.trim();
@@ -249,14 +233,14 @@
 
             await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado, falla, diagnostico });
 
-            // Si pasó de "En reparación" a "Activo" → agregar al historial
             if (estadoAnterior === "En reparación" && estado === "Activo") {
                 const fecha = new Date().toISOString().split("T")[0];
                 await addDoc(collection(db, "historial"), {
                     equipo: nombre,
                     falla: falla || "No especificada",
                     diagnostico: diagnostico || "No especificado",
-                    fecha
+                    fecha,
+                    tipo
                 });
             }
 
@@ -264,7 +248,6 @@
             cargarEquipos();
         }
 
-        // Eliminar equipo
         window.eliminarEquipo = async function(id) {
             if (!confirm("¿Seguro que quieres eliminar este equipo?")) return;
             await deleteDoc(doc(db, "equipos", id));
