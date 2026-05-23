@@ -22,6 +22,17 @@
                 <h2>Gestión de Equipos</h2>
                 <button class="btn" onclick="mostrarFormulario()">Agregar Equipo</button>
 
+                <div class="filtros-equipos">
+                    <label for="filtroTipo">Filtrar por tipo:</label>
+                    <select id="filtroTipo">
+                        <option value="todos">Todos</option>
+                        <option value="Desktop">Desktop</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Servidor">Servidor</option>
+                        <option value="Impresora">Impresora</option>
+                    </select>
+                </div>
+
                 <!-- Formulario nuevo equipo -->
                 <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                     <h3>Nuevo Equipo</h3>
@@ -100,29 +111,47 @@
         let equipoEditando = null;
 
         // Cargar equipos
-        async function cargarEquipos() {
-            const tbody = document.getElementById("tablaEquipos");
-            tbody.innerHTML = "";
-            const snap = await getDocs(collection(db, "equipos"));
-            if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
+    async function cargarEquipos() {
+        const tbody = document.getElementById("tablaEquipos");
+        const filtroTipo = document.getElementById("filtroTipo").value;
+
+        tbody.innerHTML = "";
+
+        const snap = await getDocs(collection(db, "equipos"));
+
+        if (snap.empty) {
+            tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
+            return;
+        }
+
+        let i = 1;
+        let hayResultados = false;
+
+        snap.forEach(docSnap => {
+            const d = docSnap.data();
+
+            if (filtroTipo !== "todos" && d.tipo !== filtroTipo) {
                 return;
             }
-            let i = 1;
-            snap.forEach(docSnap => {
-                const d = docSnap.data();
-                tbody.innerHTML += `<tr>
-                    <td>${i++}</td>
-                    <td>${d.nombre}</td>
-                    <td>${d.serie || "-"}</td>
-                    <td>${d.tipo}</td>
-                    <td>${d.estado}</td>
-                    <td>
-                        <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ""}', '${d.tipo}', '${d.estado}')">Editar</button>
-                        <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
-                    </td>
-                </tr>`;
+
+            hayResultados = true;
+
+            tbody.innerHTML += `<tr>
+                <td>${i++}</td>
+                <td>${d.nombre}</td>
+                <td>${d.serie || "-"}</td>
+                <td>${d.tipo}</td>
+                <td><span class="estado estado-${d.estado.replace(/\s+/g, '-').toLowerCase()}">${d.estado}</span></td>
+                <td>
+                    <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ""}', '${d.tipo}', '${d.estado}')">Editar</button>
+                    <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
+                </td>
+            </tr>`;
             });
+
+            if (!hayResultados) {
+                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos con ese tipo.</td></tr>";
+            }
         }
 
         // Agregar equipo
@@ -182,6 +211,7 @@
 
         window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
         window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+        document.getElementById("filtroTipo").addEventListener("change", cargarEquipos);
 
         cargarEquipos();
     </script>

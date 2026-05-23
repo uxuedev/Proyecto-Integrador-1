@@ -9,6 +9,7 @@
     <div class="container">
         <div class="sidebar">
             <h3>Menú</h3>
+            <a></a>
             <a href="dashboard.html" style="background: var(--secondary);">Dashboard</a>
             <a href="equipos.html">Equipos</a>
             <a href="citas.html">Citas</a>
@@ -20,10 +21,29 @@
         <div class="main">
             <div class="card">
                 <h2>Dashboard</h2>
-                <p>Resumen general del sistema</p>
-                <div class="card">Equipos registrados: <span id="totalEquipos">Cargando...</span></div>
-                <div class="card">Citas hoy: <span id="citasHoy">Cargando...</span></div>
-                <div class="card">Mantenimientos pendientes: <span id="mantenimientosPendientes">Cargando...</span></div>
+                <a id="bienvenidaUsuario">Cargando usuario...</a>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p>Equipos registrados</p>
+                        <strong id="totalEquipos">Cargando...</strong>
+                    </div>
+
+                    <div class="stat-card">
+                        <p>Citas hoy</p>
+                        <strong id="citasHoy">Cargando...</strong>
+                    </div>
+
+                    <div class="stat-card">
+                        <p>Mantenimientos pendientes</p>
+                        <strong id="mantenimientosPendientes">Cargando...</strong>
+                    </div>
+                </div>
+                <div class="panel-citas">
+                    <h3>Próximas citas pendientes</h3>
+                    <div id="proximasCitas">
+                        <p>Cargando citas...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -51,7 +71,15 @@ const db = getFirestore(app);
 async function cargarDashboard() {
 
     try {
+        // 🔹 0. NOMBRE DEL USUARIO
+        const usuariosSnap = await getDocs(collection(db, "usuarios"));
 
+        if (!usuariosSnap.empty) {
+            const usuario = usuariosSnap.docs[0].data();
+            document.getElementById("bienvenidaUsuario").textContent = `Bienvenido, ${usuario.nombre}`;
+        } else {
+            document.getElementById("bienvenidaUsuario").textContent = "Bienvenido";
+        }
         // 🔹 1. TOTAL EQUIPOS
         const equiposSnap = await getDocs(collection(db, "equipos"));
         document.getElementById("totalEquipos").textContent = equiposSnap.size || 0;
@@ -76,9 +104,49 @@ async function cargarDashboard() {
         const mantSnap = await getDocs(mantenimientosQuery);
         document.getElementById("mantenimientosPendientes").textContent = mantSnap.size || 0;
 
+        // 🔹 4. PRÓXIMAS 3 CITAS PENDIENTES
+        const contenedorCitas = document.getElementById("proximasCitas");
+        contenedorCitas.innerHTML = "<p>Cargando citas...</p>";
+
+        const citasPendientesSnap = await getDocs(collection(db, "citas"));
+
+        const proximasCitas = [];
+
+        citasPendientesSnap.forEach((doc) => {
+            const cita = doc.data();
+
+            const estado = (cita.estado || "").toLowerCase();
+            const fecha = cita.fecha || "";
+
+            if (estado === "pendiente" && fecha >= hoy) {
+                proximasCitas.push(cita);
+            }
+        });
+
+        proximasCitas.sort((a, b) => {
+            return String(a.fecha).localeCompare(String(b.fecha));
+        });
+
+        const tresCitas = proximasCitas.slice(0, 3);
+
+        if (tresCitas.length > 0) {
+            contenedorCitas.innerHTML = "";
+
+            tresCitas.forEach((cita) => {
+                contenedorCitas.innerHTML += `
+                    <div class="cita-item">
+                        <strong>${cita.equipo_nombre || "Equipo sin nombre"}</strong>
+                        <span>${cita.fecha || "Sin fecha"}</span>
+                        <small>${cita.estado || "pendiente"}</small>
+                    </div>
+                `;
+            });
+        } else {
+            contenedorCitas.innerHTML = "<p>No hay citas pendientes próximas.</p>";
+        }
+
     } catch (error) {
         console.error("Error en dashboard:", error);
-
         // fallback en caso de error
         document.getElementById("totalEquipos").textContent = 0;
         document.getElementById("citasHoy").textContent = 0;

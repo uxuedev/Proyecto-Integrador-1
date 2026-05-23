@@ -64,7 +64,7 @@ body {
     width: 220px;
     background: var(--primary);
     color: white;
-    height: 100vh;
+    min-height: 100vh;
     padding: 20px;
 }
 
@@ -119,4 +119,121 @@ table th {
     background: var(--secondary);
     color: white;
     cursor: pointer;
+}
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 30px;
+}
+/*estilos para tarjetas del dashboard*/
+.stat-card {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-left: 5px solid var(--secondary);
+    border-radius: 8px;
+    padding: 22px;
+    min-height: 110px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.stat-card p {
+    margin: 0;
+    color: #555;
+    font-size: 16px;
+}
+
+.stat-card strong {
+    display: block;
+    margin-top: 15px;
+    font-size: 34px;
+    color: #111;
+}
+
+.stat-card:nth-child(2) {
+    border-left-color: #f59e0b;
+}
+
+.stat-card:nth-child(3) {
+    border-left-color: #ef4444;
+}
+
+@media (max-width: 900px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+/*estilos para el panel de citas del dashboard*/
+.panel-citas {
+    margin-top: 25px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 22px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.panel-citas h3 {
+    margin-top: 0;
+    margin-bottom: 18px;
+}
+
+.cita-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 15px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.cita-item:last-child {
+    border-bottom: none;
+}
+
+.cita-item span {
+    color: #555;
+}
+
+.cita-item small {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-weight: bold;
+}
+.filtros-equipos {
+    margin: 18px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+/*estilo para el display de filtro*/
+.filtros-equipos select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+/* Estilos para estados de equipo*/
+.estado {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.estado-activo {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.estado-inactivo {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.estado-en-reparación {
+    background: #fef3c7;
+    color: #92400e;
 }
