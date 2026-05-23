@@ -21,15 +21,40 @@
             <div class="card">
                 <h2>Historial de Mantenimiento</h2>
 
+                <!-- Filtros -->
+                <div style="margin: 15px 0; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div>
+                        <label for="fechaDesde"><strong>Desde:</strong></label>
+                        <input type="date" id="fechaDesde" style="margin-left: 5px; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+                    </div>
+                    <div>
+                        <label for="fechaHasta"><strong>Hasta:</strong></label>
+                        <input type="date" id="fechaHasta" style="margin-left: 5px; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+                    </div>
+                    <div>
+                        <label for="filtroTipo"><strong>Tipo:</strong></label>
+                        <select id="filtroTipo" style="margin-left: 5px; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+                            <option value="todos">Todos</option>
+                            <option value="Desktop">Desktop</option>
+                            <option value="Laptop">Laptop</option>
+                            <option value="Servidor">Servidor</option>
+                            <option value="Impresora">Impresora</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="filtrarHistorial()">Filtrar</button>
+                    <button onclick="limpiarFiltro()">Limpiar</button>
+                </div>
+
                 <table>
                     <tr>
                         <th>Equipo</th>
+                        <th>Tipo</th>
                         <th>Falla</th>
                         <th>Diagnóstico</th>
                         <th>Fecha</th>
                     </tr>
                     <tbody id="tablaHistorial">
-                        <tr><td colspan="4">Cargando...</td></tr>
+                        <tr><td colspan="5">Cargando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -52,23 +77,61 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        let todosLosRegistros = [];
+
         async function cargarHistorial() {
             const tbody = document.getElementById("tablaHistorial");
             tbody.innerHTML = "";
             const snap = await getDocs(collection(db, "historial"));
             if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='4'>No hay registros en el historial.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='5'>No hay registros en el historial.</td></tr>";
                 return;
             }
+            todosLosRegistros = [];
             snap.forEach(doc => {
-                const d = doc.data();
+                todosLosRegistros.push(doc.data());
+            });
+            renderTabla(todosLosRegistros);
+        }
+
+        function renderTabla(registros) {
+            const tbody = document.getElementById("tablaHistorial");
+            tbody.innerHTML = "";
+            if (registros.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='5'>No hay registros con esos filtros.</td></tr>";
+                return;
+            }
+            registros.forEach(d => {
                 tbody.innerHTML += `<tr>
                     <td>${d.equipo}</td>
+                    <td>${d.tipo || "-"}</td>
                     <td>${d.falla}</td>
                     <td>${d.diagnostico}</td>
                     <td>${d.fecha}</td>
                 </tr>`;
             });
+        }
+
+        window.filtrarHistorial = function() {
+            const desde = document.getElementById("fechaDesde").value;
+            const hasta = document.getElementById("fechaHasta").value;
+            const tipo = document.getElementById("filtroTipo").value;
+
+            const filtrados = todosLosRegistros.filter(d => {
+                if (desde && d.fecha < desde) return false;
+                if (hasta && d.fecha > hasta) return false;
+                if (tipo !== "todos" && d.tipo !== tipo) return false;
+                return true;
+            });
+
+            renderTabla(filtrados);
+        }
+
+        window.limpiarFiltro = function() {
+            document.getElementById("fechaDesde").value = "";
+            document.getElementById("fechaHasta").value = "";
+            document.getElementById("filtroTipo").value = "todos";
+            renderTabla(todosLosRegistros);
         }
 
         cargarHistorial();
