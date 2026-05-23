@@ -44,11 +44,18 @@
                         <option value="Servidor">Servidor</option>
                         <option value="Impresora">Impresora</option>
                     </select><br>
-                    <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                    <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;" onchange="toggleCamposReparacion()">
                         <option value="Activo">Activo</option>
                         <option value="Inactivo">Inactivo</option>
                         <option value="En reparación">En reparación</option>
                     </select><br>
+
+                    <!-- Campos que aparecen solo si está En reparación -->
+                    <div id="camposReparacion" style="display:none;">
+                        <input type="text" id="falla" placeholder="Falla detectada" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                        <input type="text" id="diagnostico" placeholder="Diagnóstico" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    </div>
+
                     <button class="btn" onclick="agregarEquipo()" style="margin-top: 10px;">Guardar</button>
                     <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                     <p id="mensajeEquipo" style="color: green;"></p>
@@ -65,13 +72,32 @@
                         <option value="Servidor">Servidor</option>
                         <option value="Impresora">Impresora</option>
                     </select><br>
-                    <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;">
+                    <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;" onchange="toggleCamposEditReparacion()">
                         <option value="Activo">Activo</option>
                         <option value="Inactivo">Inactivo</option>
                         <option value="En reparación">En reparación</option>
                     </select><br>
+
+                    <!-- Campos falla/diagnostico en edición -->
+                    <div id="camposEditReparacion" style="display:none;">
+                        <input type="text" id="editFalla" placeholder="Falla detectada" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                        <input type="text" id="editDiagnostico" placeholder="Diagnóstico" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    </div>
+
                     <button class="btn" onclick="guardarEdicion()" style="margin-top: 10px;">Guardar cambios</button>
                     <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                </div>
+
+                <!-- Modal Detalles -->
+                <div id="modalDetalles" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; justify-content:center; align-items:center;">
+                    <div style="background:#fff; padding:25px; border-radius:10px; width:400px; max-width:90%;">
+                        <h3>Detalles del Equipo</h3>
+                        <p><strong>Falla:</strong> <span id="detFalla"></span></p>
+                        <p><strong>Diagnóstico:</strong> <span id="detDiagnostico"></span></p>
+                        <div style="text-align:right; margin-top:15px;">
+                            <button onclick="cerrarDetalles()">Cerrar</button>
+                        </div>
+                    </div>
                 </div>
 
                 <table>
@@ -109,49 +135,65 @@
         const db = getFirestore(app);
 
         let equipoEditando = null;
+        let estadoAnterior = null;
 
-        // Cargar equipos
-    async function cargarEquipos() {
-        const tbody = document.getElementById("tablaEquipos");
-        const filtroTipo = document.getElementById("filtroTipo").value;
-
-        tbody.innerHTML = "";
-
-        const snap = await getDocs(collection(db, "equipos"));
-
-        if (snap.empty) {
-            tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
-            return;
+        // Mostrar/ocultar campos de reparación en formulario nuevo
+        window.toggleCamposReparacion = function() {
+            const estado = document.getElementById("estado").value;
+            document.getElementById("camposReparacion").style.display = estado === "En reparación" ? "block" : "none";
         }
 
-        let i = 1;
-        let hayResultados = false;
+        // Mostrar/ocultar campos de reparación en edición
+        window.toggleCamposEditReparacion = function() {
+            const estado = document.getElementById("editEstado").value;
+            document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
+        }
 
-        snap.forEach(docSnap => {
-            const d = docSnap.data();
-
-            if (filtroTipo !== "todos" && d.tipo !== filtroTipo) {
+        // Cargar equipos
+        async function cargarEquipos() {
+            const tbody = document.getElementById("tablaEquipos");
+            const filtroTipo = document.getElementById("filtroTipo").value;
+            tbody.innerHTML = "";
+            const snap = await getDocs(collection(db, "equipos"));
+            if (snap.empty) {
+                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
                 return;
             }
-
-            hayResultados = true;
-
-            tbody.innerHTML += `<tr>
-                <td>${i++}</td>
-                <td>${d.nombre}</td>
-                <td>${d.serie || "-"}</td>
-                <td>${d.tipo}</td>
-                <td><span class="estado estado-${d.estado.replace(/\s+/g, '-').toLowerCase()}">${d.estado}</span></td>
-                <td>
-                    <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ""}', '${d.tipo}', '${d.estado}')">Editar</button>
-                    <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
-                </td>
-            </tr>`;
+            let i = 1;
+            let hayResultados = false;
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                if (filtroTipo !== "todos" && d.tipo !== filtroTipo) return;
+                hayResultados = true;
+                const falla = d.falla || "-";
+                const diagnostico = d.diagnostico || "-";
+                tbody.innerHTML += `<tr>
+                    <td>${i++}</td>
+                    <td>${d.nombre}</td>
+                    <td>${d.serie || "-"}</td>
+                    <td>${d.tipo}</td>
+                    <td><span class="estado estado-${d.estado.replace(/\s+/g, '-').toLowerCase()}">${d.estado}</span></td>
+                    <td>
+                        <button onclick="verDetalles('${d.nombre}', '${d.serie || ''}', '${d.tipo}', '${d.estado}', '${falla}', '${diagnostico}')" style="margin-right:4px;">Detalles</button>
+                        <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ''}', '${d.tipo}', '${d.estado}', '${falla}', '${diagnostico}')">Editar</button>
+                        <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
+                    </td>
+                </tr>`;
             });
-
             if (!hayResultados) {
                 tbody.innerHTML = "<tr><td colspan='6'>No hay equipos con ese tipo.</td></tr>";
             }
+        }
+
+        // Ver detalles
+        window.verDetalles = function(nombre, serie, tipo, estado, falla, diagnostico) {
+            document.getElementById("detFalla").textContent = falla;
+            document.getElementById("detDiagnostico").textContent = diagnostico;
+            document.getElementById("modalDetalles").style.display = "flex";
+        }
+
+        window.cerrarDetalles = function() {
+            document.getElementById("modalDetalles").style.display = "none";
         }
 
         // Agregar equipo
@@ -160,6 +202,8 @@
             const serie = document.getElementById("serie").value.trim();
             const tipo = document.getElementById("tipo").value;
             const estado = document.getElementById("estado").value;
+            const falla = document.getElementById("falla").value.trim();
+            const diagnostico = document.getElementById("diagnostico").value.trim();
             const mensaje = document.getElementById("mensajeEquipo");
 
             if (!nombre) {
@@ -168,32 +212,54 @@
                 return;
             }
 
-            await addDoc(collection(db, "equipos"), { nombre, serie, tipo, estado });
+            await addDoc(collection(db, "equipos"), { nombre, serie, tipo, estado, falla, diagnostico });
             mensaje.style.color = "green";
             mensaje.textContent = "Equipo agregado exitosamente.";
             document.getElementById("nombre").value = "";
             document.getElementById("serie").value = "";
+            document.getElementById("falla").value = "";
+            document.getElementById("diagnostico").value = "";
             cargarEquipos();
         }
 
         // Abrir edición
-        window.abrirEdicion = function(id, nombre, serie, tipo, estado) {
+        window.abrirEdicion = function(id, nombre, serie, tipo, estado, falla, diagnostico) {
             equipoEditando = id;
+            estadoAnterior = estado;
             document.getElementById("editNombre").value = nombre;
             document.getElementById("editSerie").value = serie;
             document.getElementById("editTipo").value = tipo;
             document.getElementById("editEstado").value = estado;
+            document.getElementById("editFalla").value = falla !== "-" ? falla : "";
+            document.getElementById("editDiagnostico").value = diagnostico !== "-" ? diagnostico : "";
+            // Mostrar campos si ya está en reparación
+            document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
             document.getElementById("formEditar").style.display = "block";
         }
 
-        // Guardar edición
+        // Guardar edición — si cambia a Activo y venía de En reparación → manda a historial
         window.guardarEdicion = async function() {
             const nombre = document.getElementById("editNombre").value.trim();
             const serie = document.getElementById("editSerie").value.trim();
             const tipo = document.getElementById("editTipo").value;
             const estado = document.getElementById("editEstado").value;
+            const falla = document.getElementById("editFalla").value.trim();
+            const diagnostico = document.getElementById("editDiagnostico").value.trim();
             if (!nombre) return;
-            await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado });
+
+            await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado, falla, diagnostico });
+
+            // Si pasó de "En reparación" a "Activo" → agregar al historial
+            if (estadoAnterior === "En reparación" && estado === "Activo") {
+                const fecha = new Date().toISOString().split("T")[0];
+                await addDoc(collection(db, "historial"), {
+                    equipo: nombre,
+                    falla: falla || "No especificada",
+                    diagnostico: diagnostico || "No especificado",
+                    fecha
+                });
+            }
+
             cerrarEdicion();
             cargarEquipos();
         }
