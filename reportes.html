@@ -68,26 +68,51 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+
+        const colecciones = {
+            equipos: "equipos",
+            citas: "citas",
+            historial: "historial",
+            preventivo: "mantenimiento_preventido"
+        };
+
         const columnas = {
-            equipos:    ["nombre", "tipo", "estado"],
-            citas:      ["fecha", "equipo", "estado"],
-            historial:  ["equipo", "falla", "diagnostico", "fecha"],
-            preventivo: ["equipo", "ultimoServicio", "proximoServicio"]
+            equipos: ["nombre", "tipo", "estado"],
+            citas: ["fecha", "equipo_nombre", "estado"],
+            historial: ["equipo", "falla", "diagnostico", "fecha"],
+            preventivo: ["fecha", "equipo_nombre", "estado"]
         };
 
         const encabezados = {
-            equipos:    ["Nombre", "Tipo", "Estado"],
-            citas:      ["Fecha", "Equipo", "Estado"],
-            historial:  ["Equipo", "Falla", "Diagnóstico", "Fecha"],
-            preventivo: ["Equipo", "Último Servicio", "Próximo Servicio"]
+            equipos: ["Nombre", "Tipo", "Estado"],
+            citas: ["Fecha", "Equipo", "Estado"],
+            historial: ["Equipo", "Falla", "Diagnóstico", "Fecha"],
+            preventivo: ["Fecha", "Equipo", "Estado"]
+        };
+
+        const titulosReporte = {
+            equipos: "Equipos",
+            citas: "Citas",
+            historial: "Historial de Mantenimiento",
+            preventivo: "Mantenimiento Preventivo"
         };
 
         async function obtenerDatos() {
             const tipo = document.getElementById("tipoReporte").value;
-            const snap = await getDocs(collection(db, tipo));
+            const nombreColeccion = colecciones[tipo];
+
+            const snap = await getDocs(collection(db, nombreColeccion));
+
             const datos = [];
             snap.forEach(doc => datos.push(doc.data()));
-            return { tipo, datos, cols: columnas[tipo], heads: encabezados[tipo] };
+
+            return {
+                tipo,
+                titulo: titulosReporte[tipo],
+                datos,
+                cols: columnas[tipo],
+                heads: encabezados[tipo]
+            };
         }
 
         function mostrarPrevia(tipo, datos, cols, heads) {
