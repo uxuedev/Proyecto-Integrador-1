@@ -80,11 +80,11 @@ async function cargarDashboard() {
         } else {
             document.getElementById("bienvenidaUsuario").textContent = "Bienvenido";
         }
-        // 🔹 1. TOTAL EQUIPOS
+        //TOTAL EQUIPOS
         const equiposSnap = await getDocs(collection(db, "equipos"));
         document.getElementById("totalEquipos").textContent = equiposSnap.size || 0;
 
-        // 🔹 2. CITAS Y PREVENTIVOS DE HOY
+        //CITAS Y PREVENTIVOS DE HOY
         const hoy = new Date().toISOString().split("T")[0];
 
         const citasHoyQuery = query(
@@ -104,7 +104,7 @@ async function cargarDashboard() {
 
         document.getElementById("citasHoy").textContent = totalHoy || 0;
 
-        // 🔹 3. TOTAL DE CITAS Y PREVENTIVOS
+        //3. TOTAL DE CITAS Y PREVENTIVOS
         const totalCitasSnap = await getDocs(collection(db, "citas"));
         const totalPreventivosSnap = await getDocs(collection(db, "mantenimiento_preventido"));
 
@@ -112,7 +112,7 @@ async function cargarDashboard() {
 
         document.getElementById("totalCitas").textContent = totalServicios || 0;
 
-        // 🔹 4. PRÓXIMAS 3 CITAS PENDIENTES
+        //4. PRÓXIMAS 3 CITAS PENDIENTES
         const contenedorCitas = document.getElementById("proximasCitas");
         contenedorCitas.innerHTML = "<p>Cargando citas...</p>";
 
@@ -162,7 +162,6 @@ async function cargarDashboard() {
     }
 }
 
-//ejecución n
 cargarDashboard();
 </script>
     
