@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tickets - Sistema de Mantenimiento</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Menú</h3>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="equipos.html">Equipos</a>
+            <a href="citas.html">Citas</a>
+            <a href="historial.html">Historial</a>
+            <a href="preventivo.html">Preventivo</a>
+            <a href="reportes.html">Reportes</a>
+            <a href="tickets.html" style="background: var(--secondary);">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
+            <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
+        </div>
+        <div class="main">
+            <div class="card">
+                <h2>Tickets de Soporte</h2>
+                <p id="descripcionVista" class="texto-ayuda"></p>
+                <button class="btn" onclick="mostrarFormulario()" data-permiso="tickets.crear">Reportar falla</button>
+
+                <!-- Formulario nuevo ticket -->
+                <div id="formulario" class="form-ticket" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3>Nuevo Ticket</h3>
+                    <select id="equipo" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="">Selecciona un equipo</option>
+                    </select><br>
+                    <input type="text" id="titulo" placeholder="Título breve de la falla" maxlength="80" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <textarea id="descripcion" placeholder="Describe lo que pasa con el equipo" rows="3" style="margin: 5px 0; padding: 8px; width: 100%;"></textarea><br>
+                    <select id="prioridad" style="margin: 5px 0; padding: 8px; width: 100%;">
+                        <option value="Baja">Prioridad baja</option>
+                        <option value="Media" selected>Prioridad media</option>
+                        <option value="Alta">Prioridad alta</option>
+                    </select><br>
+                    <button class="btn" onclick="crearTicket()" style="margin-top: 10px;">Enviar ticket</button>
+                    <button onclick="ocultarFormulario()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                    <p id="mensajeTicket" style="color: green;"></p>
+                </div>
+
+                <!-- Filtros combinados -->
+                <div class="filtros-equipos">
+                    <input type="search" id="buscarTicket" placeholder="Buscar por título o equipo">
+                    <label for="filtroEstado">Estado:</label>
+                    <select id="filtroEstado">
+                        <option value="todos">Todos</option>
+                        <option value="Abierto">Abierto</option>
+                        <option value="En proceso">En proceso</option>
+                        <option value="Cerrado">Cerrado</option>
+                    </select>
+                    <label for="filtroPrioridad">Prioridad:</label>
+                    <select id="filtroPrioridad">
+                        <option value="todos">Todas</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                    </select>
+                    <span data-permiso="tickets.ver_todos">
+                        <label for="filtroTecnico">Técnico:</label>
+                        <select id="filtroTecnico">
+                            <option value="todos">Todos</option>
+                            <option value="sin_asignar">Sin asignar</option>
+                        </select>
+                    </span>
+                    <button onclick="limpiarFiltros()">Limpiar</button>
+                    <span id="contadorTickets" class="contador-resultados"></span>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Equipo</th>
+                        <th>Título</th>
+                        <th>Prioridad</th>
+                        <th>Estado</th>
+                        <th>Técnico</th>
+                        <th>Acciones</th>
+                    </tr>
+                    <tbody id="tablaTickets">
+                        <tr><td colspan="7">Cargando...</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- Modal detalle / atención del ticket -->
+                <div id="modalTicket" class="modal">
+                    <div class="modal-contenido">
+                        <h3 id="detTitulo"></h3>
+                        <p><strong>Equipo:</strong> <span id="detEquipo"></span></p>
+                        <p><strong>Reportado por:</strong> <span id="detCreador"></span> el <span id="detFecha"></span></p>
+                        <p><strong>Prioridad:</strong> <span id="detPrioridad"></span> · <strong>Estado:</strong> <span id="detEstado"></span></p>
+                        <p><strong>Descripción:</strong><br><span id="detDescripcion"></span></p>
+                        <p id="detSolucionBloque"><strong>Solución:</strong><br><span id="detSolucion"></span></p>
+
+                        <div id="bloqueAsignar" data-permiso="tickets.asignar">
+                            <label for="asignarTecnico"><strong>Asignar a:</strong></label>
+                            <select id="asignarTecnico" style="padding: 6px;"></select>
+                            <button class="btn" onclick="asignarTicket()">Asignar</button>
+                        </div>
+
+                        <div id="bloqueCerrar">
+                            <textarea id="solucion" placeholder="Describe la solución aplicada" rows="3" style="margin: 10px 0 5px; padding: 8px; width: 100%;"></textarea>
+                            <button class="btn" onclick="cerrarTicket()">Cerrar ticket</button>
+                        </div>
+                        <p id="mensajeModal" style="color: red;"></p>
+
+                        <div style="text-align:right; margin-top:15px;">
+                            <button onclick="cerrarModal()">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from "./firebase.js";
+        import { requerirSesion, puede, esc } from "./sesion.js";
+        import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where }
+        from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        let perfil = null;
+        let tickets = [];
+        let equipos = [];
+        let tecnicos = [];
+        let ticketAbierto = null;
+
+        const hoy = () => new Date().toISOString().split("T")[0];
+        const claseEstado = estado => "estado-" + estado.replace(/\s+/g, "-").toLowerCase();
+
+        async function cargarEquipos() {
+            const select = document.getElementById("equipo");
+            const snap = await getDocs(collection(db, "equipos"));
+            equipos = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || "")));
+            select.innerHTML = "<option value=''>Selecciona un equipo</option>" +
+                equipos.map(e => `<option value="${e.id}">${esc(e.nombre || "(sin nombre)")}${e.tipo ? " — " + esc(e.tipo) : ""}</option>`).join("");
+        }
+
+        // Usuarios con rol técnico o administrador, para asignar tickets
+        async function cargarTecnicos() {
+            if (!puede("tickets.ver_todos")) return;
+            const snap = await getDocs(query(collection(db, "usuarios"), where("rol", "in", ["tecnico", "admin"])));
+            tecnicos = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre || d.data().email }));
+            const opciones = tecnicos.map(t => `<option value="${t.id}">${esc(t.nombre)}</option>`).join("");
+            document.getElementById("filtroTecnico").innerHTML +=
+                `<option value="${perfil.id}">Asignados a mí</option>` + opciones;
+            const asignar = document.getElementById("asignarTecnico");
+            if (asignar) asignar.innerHTML = opciones;
+        }
+
+        async function cargarTickets() {
+            // El usuario normal solo consulta los tickets que él creó
+            const fuente = puede("tickets.ver_todos")
+                ? collection(db, "tickets")
+                : query(collection(db, "tickets"), where("creado_por_id", "==", perfil.id));
+            const snap = await getDocs(fuente);
+            tickets = snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => String(b.fecha_creacion).localeCompare(String(a.fecha_creacion)));
+            renderTickets();
+        }
+
+        function accionesDe(t) {
+            const botones = [`<button onclick="verTicket('${t.id}')">Ver</button>`];
+            if (puede("tickets.atender") && t.estado === "Abierto" && !t.tecnico_id) {
+                botones.push(`<button class="btn" onclick="tomarTicket('${t.id}')">Tomar</button>`);
+            }
+            if (puede("tickets.eliminar")) {
+                botones.push(`<button onclick="eliminarTicket('${t.id}')" style="color: red;">Eliminar</button>`);
+            }
+            return botones.join(" ");
+        }
+
+        function renderTickets() {
+            const tbody = document.getElementById("tablaTickets");
+            const texto = document.getElementById("buscarTicket").value.trim().toLowerCase();
+            const estado = document.getElementById("filtroEstado").value;
+            const prioridad = document.getElementById("filtroPrioridad").value;
+            const filtroTecnico = document.getElementById("filtroTecnico");
+            const tecnico = filtroTecnico ? filtroTecnico.value : "todos";
+
+            const filtrados = tickets.filter(t => {
+                if (estado !== "todos" && t.estado !== estado) return false;
+                if (prioridad !== "todos" && t.prioridad !== prioridad) return false;
+                if (tecnico === "sin_asignar" && t.tecnico_id) return false;
+                if (tecnico !== "todos" && tecnico !== "sin_asignar" && t.tecnico_id !== tecnico) return false;
+                if (texto && !`${t.titulo} ${t.equipo_nombre}`.toLowerCase().includes(texto)) return false;
+                return true;
+            });
+
+            document.getElementById("contadorTickets").textContent = `${filtrados.length} de ${tickets.length} tickets`;
+
+            if (tickets.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='7'>No hay tickets registrados.</td></tr>";
+                return;
+            }
+            if (filtrados.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='7'>No hay tickets con esos filtros.</td></tr>";
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map(t => `<tr>
+                <td>${esc(t.fecha_creacion)}</td>
+                <td>${esc(t.equipo_nombre)}</td>
+                <td>${esc(t.titulo)}</td>
+                <td><span class="prioridad prioridad-${esc(t.prioridad).toLowerCase()}">${esc(t.prioridad)}</span></td>
+                <td><span class="estado ${claseEstado(t.estado)}">${esc(t.estado)}</span></td>
+                <td>${esc(t.tecnico_nombre || "Sin asignar")}</td>
+                <td>${accionesDe(t)}</td>
+            </tr>`).join("");
+        }
+
+        window.crearTicket = async function() {
+            const equipoId = document.getElementById("equipo").value;
+            const titulo = document.getElementById("titulo").value.trim();
+            const descripcion = document.getElementById("descripcion").value.trim();
+            const prioridad = document.getElementById("prioridad").value;
+            const mensaje = document.getElementById("mensajeTicket");
+
+            if (!equipoId || !titulo) {
+                mensaje.style.color = "red";
+                mensaje.textContent = "Selecciona un equipo y escribe un título.";
+                return;
+            }
+
+            const equipo = equipos.find(e => e.id === equipoId);
+            await addDoc(collection(db, "tickets"), {
+                titulo,
+                descripcion,
+                prioridad,
+                estado: "Abierto",
+                equipo_id: equipoId,
+                equipo_nombre: equipo.nombre,
+                equipo_tipo: equipo.tipo || "",
+                creado_por_id: perfil.id,
+                creado_por_nombre: perfil.nombre,
+                tecnico_id: "",
+                tecnico_nombre: "",
+                fecha_creacion: hoy(),
+                fecha_cierre: "",
+                solucion: ""
+            });
+
+            mensaje.style.color = "green";
+            mensaje.textContent = "Ticket enviado. Un técnico lo atenderá pronto.";
+            document.getElementById("equipo").value = "";
+            document.getElementById("titulo").value = "";
+            document.getElementById("descripcion").value = "";
+            cargarTickets();
+        }
+
+        // El técnico se asigna el ticket y pasa a "En proceso"
+        window.tomarTicket = async function(id) {
+            await updateDoc(doc(db, "tickets", id), {
+                tecnico_id: perfil.id,
+                tecnico_nombre: perfil.nombre,
+                estado: "En proceso"
+            });
+            cargarTickets();
+        }
+
+        window.asignarTicket = async function() {
+            const tecnicoId = document.getElementById("asignarTecnico").value;
+            const tecnico = tecnicos.find(t => t.id === tecnicoId);
+            if (!tecnico) return;
+            await updateDoc(doc(db, "tickets", ticketAbierto.id), {
+                tecnico_id: tecnico.id,
+                tecnico_nombre: tecnico.nombre,
+                estado: ticketAbierto.estado === "Cerrado" ? "Cerrado" : "En proceso"
+            });
+            cerrarModal();
+            cargarTickets();
+        }
+
+        // Al cerrar, el ticket queda registrado en el historial de mantenimiento
+        window.cerrarTicket = async function() {
+            const solucion = document.getElementById("solucion").value.trim();
+            if (!solucion) {
+                document.getElementById("mensajeModal").textContent = "Describe la solución antes de cerrar.";
+                return;
+            }
+            const t = ticketAbierto;
+            await updateDoc(doc(db, "tickets", t.id), {
+                estado: "Cerrado",
+                solucion,
+                fecha_cierre: hoy(),
+                tecnico_id: t.tecnico_id || perfil.id,
+                tecnico_nombre: t.tecnico_nombre || perfil.nombre
+            });
+            await addDoc(collection(db, "historial"), {
+                equipo: t.equipo_nombre,
+                falla: t.titulo,
+                diagnostico: solucion,
+                fecha: hoy(),
+                tipo: t.equipo_tipo || ""
+            });
+            cerrarModal();
+            cargarTickets();
+        }
+
+        window.eliminarTicket = async function(id) {
+            if (!confirm("¿Seguro que quieres eliminar este ticket?")) return;
+            await deleteDoc(doc(db, "tickets", id));
+            cargarTickets();
+        }
+
+        window.verTicket = function(id) {
+            const t = tickets.find(x => x.id === id);
+            ticketAbierto = t;
+            document.getElementById("detTitulo").textContent = t.titulo;
+            document.getElementById("detEquipo").textContent = t.equipo_nombre;
+            document.getElementById("detCreador").textContent = t.creado_por_nombre;
+            document.getElementById("detFecha").textContent = t.fecha_creacion;
+            document.getElementById("detPrioridad").textContent = t.prioridad;
+            document.getElementById("detEstado").textContent = t.estado;
+            document.getElementById("detDescripcion").textContent = t.descripcion || "Sin descripción";
+            document.getElementById("detSolucion").textContent = t.solucion
+                ? `${t.solucion} (${t.fecha_cierre})` : "";
+            document.getElementById("detSolucionBloque").style.display = t.solucion ? "block" : "none";
+            document.getElementById("mensajeModal").textContent = "";
+            document.getElementById("solucion").value = "";
+
+            // Puede cerrar: el técnico asignado o un administrador, si sigue abierto
+            const puedeCerrar = t.estado !== "Cerrado" && puede("tickets.atender")
+                && (t.tecnico_id === perfil.id || puede("tickets.asignar"));
+            document.getElementById("bloqueCerrar").style.display = puedeCerrar ? "block" : "none";
+
+            const bloqueAsignar = document.getElementById("bloqueAsignar");
+            if (bloqueAsignar) {
+                bloqueAsignar.style.display = t.estado !== "Cerrado" ? "block" : "none";
+                if (t.tecnico_id) document.getElementById("asignarTecnico").value = t.tecnico_id;
+            }
+
+            document.getElementById("modalTicket").style.display = "flex";
+        }
+
+        window.cerrarModal = function() {
+            document.getElementById("modalTicket").style.display = "none";
+        }
+
+        window.limpiarFiltros = function() {
+            document.getElementById("buscarTicket").value = "";
+            document.getElementById("filtroEstado").value = "todos";
+            document.getElementById("filtroPrioridad").value = "todos";
+            const filtroTecnico = document.getElementById("filtroTecnico");
+            if (filtroTecnico) filtroTecnico.value = "todos";
+            renderTickets();
+        }
+
+        window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
+        window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+
+        requerirSesion().then(async p => {
+            perfil = p;
+            document.getElementById("descripcionVista").textContent = puede("tickets.ver_todos")
+                ? "Incidencias reportadas por los usuarios. Toma un ticket para atenderlo."
+                : "Reporta fallas de tus equipos y da seguimiento a tus tickets.";
+
+            document.getElementById("buscarTicket").addEventListener("input", renderTickets);
+            ["filtroEstado", "filtroPrioridad", "filtroTecnico"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener("change", renderTickets);
+            });
+
+            await Promise.all([cargarEquipos(), cargarTecnicos()]);
+            cargarTickets();
+        });
+    </script>
+</body>
+</html>

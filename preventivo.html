@@ -15,6 +15,8 @@
             <a href="historial.html">Historial</a>
             <a href="preventivo.html" style="background: var(--secondary);">Preventivo</a>
             <a href="reportes.html">Reportes</a>
+            <a href="tickets.html">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
             <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
         </div>
         <div class="main">
@@ -73,21 +75,10 @@
     </div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc } 
+    import { db } from "./firebase.js";
+    import { requerirSesion, puede, esc } from "./sesion.js";
+    import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
     from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-        authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-        projectId: "proyecto-integrador-77c49",
-        storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-        messagingSenderId: "1074040277954",
-        appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
 
     let preventivoEditando = null;
     let equipoEditando = null;
@@ -119,12 +110,12 @@ async function cargarPreventivos() {
         const d = docSnap.data();
 
         tbody.innerHTML += `<tr>
-            <td>${d.fecha}</td>
-            <td>${d.equipo_nombre}</td>
-            <td>${d.estado}</td>
+            <td>${esc(d.fecha)}</td>
+            <td>${esc(d.equipo_nombre)}</td>
+            <td>${esc(d.estado)}</td>
             <td>
                 <button onclick="abrirEdicion('${docSnap.id}', '${d.fecha}', '${d.estado}', '${d.equipo_id}')">Editar</button>
-                <button onclick="eliminarPreventivo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
+                ${puede("preventivo.eliminar") ? `<button onclick="eliminarPreventivo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>` : ""}
             </td>
         </tr>`;
     });
@@ -209,8 +200,10 @@ window.agregarPreventivo = async function() {
     window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
     window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
 
-    cargarEquipos();
-    cargarPreventivos();
+    requerirSesion().then(() => {
+        cargarEquipos();
+        cargarPreventivos();
+    });
 </script>
 </body>
 </html>

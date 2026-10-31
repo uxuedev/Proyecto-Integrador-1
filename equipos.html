@@ -15,15 +15,18 @@
             <a href="historial.html">Historial</a>
             <a href="preventivo.html">Preventivo</a>
             <a href="reportes.html">Reportes</a>
+            <a href="tickets.html">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
             <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
         </div>
         <div class="main">
             <div class="card">
                 <h2>Gestión de Equipos</h2>
-                <button class="btn" onclick="mostrarFormulario()">Agregar Equipo</button>
+                <button class="btn" onclick="mostrarFormulario()" data-permiso="equipos.agregar">Agregar Equipo</button>
 
                 <div class="filtros-equipos">
-                    <label for="filtroTipo">Filtrar por tipo:</label>
+                    <input type="search" id="buscarEquipo" placeholder="Buscar por nombre o serie">
+                    <label for="filtroTipo">Tipo:</label>
                     <select id="filtroTipo">
                         <option value="todos">Todos</option>
                         <option value="Desktop">Desktop</option>
@@ -31,6 +34,15 @@
                         <option value="Servidor">Servidor</option>
                         <option value="Impresora">Impresora</option>
                     </select>
+                    <label for="filtroEstado">Estado:</label>
+                    <select id="filtroEstado">
+                        <option value="todos">Todos</option>
+                        <option value="Activo">Activo</option>
+                        <option value="Inactivo">Inactivo</option>
+                        <option value="En reparación">En reparación</option>
+                    </select>
+                    <button onclick="limpiarFiltros()">Limpiar</button>
+                    <span id="contadorEquipos" class="contador-resultados"></span>
                 </div>
 
                 <!-- Formulario nuevo equipo -->
@@ -112,24 +124,14 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
+        import { db } from "./firebase.js";
+        import { requerirSesion, puede, esc } from "./sesion.js";
+        import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
         from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-            projectId: "proyecto-integrador-77c49",
-            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-            messagingSenderId: "1074040277954",
-            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
 
         let equipoEditando = null;
         let estadoAnterior = null;
+        let equipos = [];
 
         window.toggleCamposReparacion = function() {
             const estado = document.getElementById("estado").value;
@@ -142,43 +144,63 @@
         }
 
         async function cargarEquipos() {
-            const tbody = document.getElementById("tablaEquipos");
-            const filtroTipo = document.getElementById("filtroTipo").value;
-            tbody.innerHTML = "";
             const snap = await getDocs(collection(db, "equipos"));
-            if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
-                return;
-            }
-            let i = 1;
-            let hayResultados = false;
-            snap.forEach(docSnap => {
-                const d = docSnap.data();
-                if (filtroTipo !== "todos" && d.tipo !== filtroTipo) return;
-                hayResultados = true;
-                const falla = d.falla || "-";
-                const diagnostico = d.diagnostico || "-";
-                tbody.innerHTML += `<tr>
-                    <td>${i++}</td>
-                    <td>${d.nombre}</td>
-                    <td>${d.serie || "-"}</td>
-                    <td>${d.tipo}</td>
-                    <td><span class="estado estado-${d.estado.replace(/\s+/g, '-').toLowerCase()}">${d.estado}</span></td>
-                    <td>
-                        <button onclick="verDetalles('${falla}', '${diagnostico}')" style="margin-right:4px;">Detalles</button>
-                        <button onclick="abrirEdicion('${docSnap.id}', '${d.nombre}', '${d.serie || ''}', '${d.tipo}', '${d.estado}', '${falla}', '${diagnostico}')">Editar</button>
-                        <button onclick="eliminarEquipo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>
-                    </td>
-                </tr>`;
-            });
-            if (!hayResultados) {
-                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos con ese tipo.</td></tr>";
-            }
+            equipos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderEquipos();
         }
 
-        window.verDetalles = function(falla, diagnostico) {
-            document.getElementById("detFalla").textContent = falla;
-            document.getElementById("detDiagnostico").textContent = diagnostico;
+        // Aplica búsqueda, tipo y estado al mismo tiempo
+        function renderEquipos() {
+            const tbody = document.getElementById("tablaEquipos");
+            const texto = document.getElementById("buscarEquipo").value.trim().toLowerCase();
+            const filtroTipo = document.getElementById("filtroTipo").value;
+            const filtroEstado = document.getElementById("filtroEstado").value;
+
+            if (equipos.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
+                document.getElementById("contadorEquipos").textContent = "";
+                return;
+            }
+
+            const filtrados = equipos.filter(d => {
+                if (filtroTipo !== "todos" && d.tipo !== filtroTipo) return false;
+                if (filtroEstado !== "todos" && d.estado !== filtroEstado) return false;
+                if (texto && !`${d.nombre} ${d.serie || ""}`.toLowerCase().includes(texto)) return false;
+                return true;
+            });
+
+            document.getElementById("contadorEquipos").textContent = `${filtrados.length} de ${equipos.length} equipos`;
+
+            if (filtrados.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos con esos filtros.</td></tr>";
+                return;
+            }
+
+            tbody.innerHTML = filtrados.map((d, i) => `<tr>
+                <td>${i + 1}</td>
+                <td>${esc(d.nombre)}</td>
+                <td>${esc(d.serie || "-")}</td>
+                <td>${esc(d.tipo)}</td>
+                <td><span class="estado estado-${esc((d.estado || "").replace(/\s+/g, '-').toLowerCase())}">${esc(d.estado)}</span></td>
+                <td>
+                    <button onclick="verDetalles('${d.id}')" style="margin-right:4px;">Detalles</button>
+                    ${puede("equipos.editar") ? `<button onclick="abrirEdicion('${d.id}')">Editar</button>` : ""}
+                    ${puede("equipos.eliminar") ? `<button onclick="eliminarEquipo('${d.id}')" style="margin-left: 5px; color: red;">Eliminar</button>` : ""}
+                </td>
+            </tr>`).join("");
+        }
+
+        window.limpiarFiltros = function() {
+            document.getElementById("buscarEquipo").value = "";
+            document.getElementById("filtroTipo").value = "todos";
+            document.getElementById("filtroEstado").value = "todos";
+            renderEquipos();
+        }
+
+        window.verDetalles = function(id) {
+            const d = equipos.find(e => e.id === id);
+            document.getElementById("detFalla").textContent = d.falla || "-";
+            document.getElementById("detDiagnostico").textContent = d.diagnostico || "-";
             document.getElementById("modalDetalles").style.display = "flex";
         }
 
@@ -209,16 +231,17 @@
             cargarEquipos();
         }
 
-        window.abrirEdicion = function(id, nombre, serie, tipo, estado, falla, diagnostico) {
+        window.abrirEdicion = function(id) {
+            const d = equipos.find(e => e.id === id);
             equipoEditando = id;
-            estadoAnterior = estado;
-            document.getElementById("editNombre").value = nombre;
-            document.getElementById("editSerie").value = serie;
-            document.getElementById("editTipo").value = tipo;
-            document.getElementById("editEstado").value = estado;
-            document.getElementById("editFalla").value = falla !== "-" ? falla : "";
-            document.getElementById("editDiagnostico").value = diagnostico !== "-" ? diagnostico : "";
-            document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
+            estadoAnterior = d.estado;
+            document.getElementById("editNombre").value = d.nombre || "";
+            document.getElementById("editSerie").value = d.serie || "";
+            document.getElementById("editTipo").value = d.tipo;
+            document.getElementById("editEstado").value = d.estado;
+            document.getElementById("editFalla").value = d.falla || "";
+            document.getElementById("editDiagnostico").value = d.diagnostico || "";
+            document.getElementById("camposEditReparacion").style.display = d.estado === "En reparación" ? "block" : "none";
             document.getElementById("formEditar").style.display = "block";
         }
 
@@ -260,9 +283,11 @@
 
         window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
         window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
-        document.getElementById("filtroTipo").addEventListener("change", cargarEquipos);
+        document.getElementById("buscarEquipo").addEventListener("input", renderEquipos);
+        document.getElementById("filtroTipo").addEventListener("change", renderEquipos);
+        document.getElementById("filtroEstado").addEventListener("change", renderEquipos);
 
-        cargarEquipos();
+        requerirSesion().then(cargarEquipos);
     </script>
 </body>
 </html>

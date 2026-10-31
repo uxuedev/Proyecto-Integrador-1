@@ -22,37 +22,82 @@
                 <div class="brand-sub">Gestión de mantenimiento de equipos</div>
             </div>
 
-            <h2>Iniciar Sesión</h2>
+            <div id="formLogin">
+                <h2>Iniciar Sesión</h2>
 
-            <input type="email" id="usuario" placeholder="Correo">
-            <input type="password" id="contrasena" placeholder="Contraseña">
+                <input type="email" id="usuario" placeholder="Correo">
+                <input type="password" id="contrasena" placeholder="Contraseña">
 
-            <button onclick="login()">Entrar</button>
+                <button onclick="login()">Entrar</button>
+
+                <p class="cambiar-modo">¿No tienes cuenta? <a href="#" onclick="mostrarRegistro(true)">Regístrate</a></p>
+            </div>
+
+            <!-- Registro: toda cuenta nueva entra con rol Usuario; el administrador lo cambia después -->
+            <div id="formRegistro" style="display:none;">
+                <h2>Crear cuenta</h2>
+
+                <input type="text" id="regNombre" placeholder="Nombre completo">
+                <input type="email" id="regCorreo" placeholder="Correo">
+                <input type="password" id="regContrasena" placeholder="Contraseña (mínimo 6 caracteres)">
+                <input type="password" id="regConfirmar" placeholder="Confirmar contraseña">
+
+                <button onclick="registrar()">Crear cuenta</button>
+
+                <p class="cambiar-modo">¿Ya tienes cuenta? <a href="#" onclick="mostrarRegistro(false)">Inicia sesión</a></p>
+            </div>
 
             <p id="error" style="color:red;"></p>
         </div>
     </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword } 
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc }
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { auth, db } from "./firebase.js";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword }
+from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { doc, setDoc }
+from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// 🔴 PEGA TU CONFIG REAL AQUÍ - YA ESTA PEGADA
-const firebaseConfig = {
-    apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-    authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-    projectId: "proyecto-integrador-77c49",
-    storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-    messagingSenderId: "1074040277954",
-    appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-  };
+window.mostrarRegistro = function(registro) {
+    document.getElementById("formLogin").style.display = registro ? "none" : "block";
+    document.getElementById("formRegistro").style.display = registro ? "block" : "none";
+    document.getElementById("error").textContent = "";
+}
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const erroresRegistro = {
+    "auth/email-already-in-use": "Ese correo ya está registrado.",
+    "auth/invalid-email": "El correo no es válido.",
+    "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+    "auth/operation-not-allowed": "El registro está deshabilitado en Firebase."
+};
+
+window.registrar = async function() {
+    const nombre = document.getElementById("regNombre").value.trim();
+    const email = document.getElementById("regCorreo").value.trim();
+    const password = document.getElementById("regContrasena").value;
+    const confirmar = document.getElementById("regConfirmar").value;
+    const errorText = document.getElementById("error");
+
+    if (!nombre || !email || !password) {
+        errorText.textContent = "Completa todos los campos.";
+        return;
+    }
+    if (password !== confirmar) {
+        errorText.textContent = "Las contraseñas no coinciden.";
+        return;
+    }
+
+    try {
+        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "usuarios", user.uid), { nombre, email, rol: "usuario" });
+
+        window.location.href = "dashboard.html";
+
+    } catch (error) {
+        console.error(error);
+        errorText.textContent = erroresRegistro[error.code] || "No se pudo crear la cuenta.";
+    }
+}
 
 window.login = async function() {
 

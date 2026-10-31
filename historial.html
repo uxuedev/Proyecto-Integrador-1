@@ -15,6 +15,8 @@
             <a href="historial.html" style="background: var(--secondary);">Historial</a>
             <a href="preventivo.html">Preventivo</a>
             <a href="reportes.html">Reportes</a>
+            <a href="tickets.html">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
             <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
         </div>
         <div class="main">
@@ -23,6 +25,9 @@
 
                 <!-- Filtros -->
                 <div style="margin: 15px 0; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div>
+                        <input type="search" id="buscarHistorial" placeholder="Buscar equipo, falla o diagnóstico" style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; min-width: 240px;">
+                    </div>
                     <div>
                         <label for="fechaDesde"><strong>Desde:</strong></label>
                         <input type="date" id="fechaDesde" style="margin-left: 5px; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
@@ -62,20 +67,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-            authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-            projectId: "proyecto-integrador-77c49",
-            storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-            messagingSenderId: "1074040277954",
-            appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        import { db } from "./firebase.js";
+        import { requerirSesion, esc } from "./sesion.js";
+        import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
         let todosLosRegistros = [];
 
@@ -103,11 +97,11 @@
             }
             registros.forEach(d => {
                 tbody.innerHTML += `<tr>
-                    <td>${d.equipo}</td>
-                    <td>${d.tipo || "-"}</td>
-                    <td>${d.falla}</td>
-                    <td>${d.diagnostico}</td>
-                    <td>${d.fecha}</td>
+                    <td>${esc(d.equipo)}</td>
+                    <td>${esc(d.tipo || "-")}</td>
+                    <td>${esc(d.falla)}</td>
+                    <td>${esc(d.diagnostico)}</td>
+                    <td>${esc(d.fecha)}</td>
                 </tr>`;
             });
         }
@@ -116,11 +110,13 @@
             const desde = document.getElementById("fechaDesde").value;
             const hasta = document.getElementById("fechaHasta").value;
             const tipo = document.getElementById("filtroTipo").value;
+            const texto = document.getElementById("buscarHistorial").value.trim().toLowerCase();
 
             const filtrados = todosLosRegistros.filter(d => {
                 if (desde && d.fecha < desde) return false;
                 if (hasta && d.fecha > hasta) return false;
                 if (tipo !== "todos" && d.tipo !== tipo) return false;
+                if (texto && !`${d.equipo} ${d.falla} ${d.diagnostico}`.toLowerCase().includes(texto)) return false;
                 return true;
             });
 
@@ -128,13 +124,16 @@
         }
 
         window.limpiarFiltro = function() {
+            document.getElementById("buscarHistorial").value = "";
             document.getElementById("fechaDesde").value = "";
             document.getElementById("fechaHasta").value = "";
             document.getElementById("filtroTipo").value = "todos";
             renderTabla(todosLosRegistros);
         }
 
-        cargarHistorial();
+        document.getElementById("buscarHistorial").addEventListener("input", filtrarHistorial);
+
+        requerirSesion().then(cargarHistorial);
     </script>
 </body>
 </html>
