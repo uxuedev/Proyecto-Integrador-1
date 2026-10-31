@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Diagramas - TechCare 2.0</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #F5F7FA; color: #1C1C1C; }
+        header { background: #0B3C5D; color: white; padding: 20px 30px; }
+        header h1 { margin: 0; font-size: 24px; }
+        header p { margin: 5px 0 0; opacity: 0.85; }
+        section { background: white; margin: 25px 30px; padding: 20px 25px; border-radius: 8px; }
+        section h2 { margin-top: 0; color: #0B3C5D; }
+        .descripcion { color: #555; }
+        .mermaid { text-align: center; }
+        button { padding: 8px 12px; border: none; background: #328CC1; color: white; cursor: pointer; border-radius: 4px; }
+        /* Modo captura: solo un diagrama, sin encabezados */
+        body.captura { background: white; }
+        body.captura header, body.captura .descripcion, body.captura button, body.captura h2 { display: none; }
+        body.captura section { margin: 0; padding: 20px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>TechCare 2.0 — Representación del sistema</h1>
+        <p>Proyecto Integrador 2 · Equipo 7 · Fase de Desarrollo</p>
+    </header>
+
+    <section id="clases">
+        <h2>Diagrama de clases UML</h2>
+        <p class="descripcion">
+            Cada clase corresponde a una colección de Firestore (los atributos son los campos guardados) y
+            sus métodos son las operaciones que ofrece la interfaz. Notificación y Reporte no se guardan:
+            se calculan a partir de las demás colecciones.
+        </p>
+        <button onclick="descargar('clases')">Descargar PNG</button>
+<pre class="mermaid">
+classDiagram
+    direction TB
+
+    class Rol {
+        &lt;&lt;enumeration&gt;&gt;
+        admin
+        tecnico
+        usuario
+    }
+
+    class Usuario {
+        +String id
+        +String nombre
+        +String email
+        +Rol rol
+        +iniciarSesion(email, contraseña)
+        +cerrarSesion()
+        +puede(permiso) bool
+        +cambiarRol(rol)
+    }
+
+    class Equipo {
+        +String id
+        +String nombre
+        +String serie
+        +String tipo
+        +String estado
+        +String falla
+        +String diagnostico
+        +agregar()
+        +editar()
+        +eliminar()
+        +filtrar(texto, tipo, estado)
+    }
+
+    class Cita {
+        +String id
+        +Date fecha
+        +String equipo_id
+        +String equipo_nombre
+        +String estado
+        +agendar()
+        +editar()
+        +eliminar()
+    }
+
+    class MantenimientoPreventivo {
+        +String id
+        +Date fecha
+        +String equipo_id
+        +String equipo_nombre
+        +String estado
+        +programar()
+        +editar()
+        +eliminar()
+    }
+
+    class Historial {
+        +String id
+        +String equipo
+        +String tipo
+        +String falla
+        +String diagnostico
+        +Date fecha
+        +registrar()
+        +filtrar(desde, hasta, tipo, texto)
+    }
+
+    class Ticket {
+        +String id
+        +String titulo
+        +String descripcion
+        +String prioridad
+        +String estado
+        +String equipo_id
+        +String creado_por_id
+        +String tecnico_id
+        +Date fecha_creacion
+        +Date fecha_cierre
+        +String solucion
+        +crear()
+        +tomar()
+        +asignar(tecnico)
+        +cerrar(solucion)
+        +eliminar()
+        +filtrar(texto, estado, prioridad, tecnico)
+    }
+
+    class Notificacion {
+        &lt;&lt;calculada&gt;&gt;
+        +String nivel
+        +String texto
+        +construir(citas, preventivos, tickets, equipos)
+    }
+
+    class Reporte {
+        &lt;&lt;calculado&gt;&gt;
+        +String tipo
+        +generarPDF()
+        +generarExcel()
+    }
+
+    Usuario --> Rol : tiene
+    Usuario "1" --> "0..*" Ticket : reporta
+    Usuario "1" --> "0..*" Ticket : atiende
+    Equipo "1" --> "0..*" Ticket : recibe
+    Equipo "1" --> "0..*" Cita : agenda
+    Equipo "1" --> "0..*" MantenimientoPreventivo : programa
+    Equipo "1" --> "0..*" Historial : acumula
+    Ticket ..> Historial : al cerrarse genera
+    Notificacion ..> Cita : revisa
+    Notificacion ..> MantenimientoPreventivo : revisa
+    Notificacion ..> Ticket : revisa
+    Reporte ..> Equipo : exporta
+    Reporte ..> Ticket : exporta
+</pre>
+    </section>
+
+    <section id="login">
+        <h2>Diagrama de flujo: inicio de sesión por roles</h2>
+        <p class="descripcion">
+            Todas las páginas internas pasan por este control antes de mostrar información.
+            El menú y los botones se ajustan según el rol.
+        </p>
+        <button onclick="descargar('login')">Descargar PNG</button>
+<pre class="mermaid">
+flowchart TD
+    A([Inicio]) --> B[/Ingresa correo y contraseña/]
+    B --> C{¿Credenciales válidas<br/>en Firebase Auth?}
+    C -- No --> D[Mostrar: Usuario o contraseña incorrectos]
+    D --> B
+    C -- Sí --> E[Buscar perfil en colección usuarios]
+    E --> F{¿Existe el perfil?}
+    F -- No --> G[Crear perfil con rol usuario]
+    F -- Sí --> H[Leer rol]
+    G --> H
+    H --> I{¿El rol tiene permiso<br/>para la página?}
+    I -- No --> J[Redirigir al Dashboard]
+    I -- Sí --> K[Ocultar menús y botones<br/>no permitidos]
+    J --> K
+    K --> L{Rol}
+    L -- Administrador --> M[Acceso total:<br/>usuarios, eliminar, asignar tickets]
+    L -- Técnico --> N[Equipos, citas, preventivo,<br/>historial, reportes, atender tickets]
+    L -- Usuario --> O[Dashboard, consulta de equipos,<br/>crear y seguir sus tickets]
+    M --> P[Dashboard con notificaciones y gráficas]
+    N --> P
+    O --> P
+    P --> Q{¿Cerrar sesión?}
+    Q -- Sí --> R([Fin])
+</pre>
+    </section>
+
+    <section id="tickets">
+        <h2>Diagrama de flujo: atención de tickets</h2>
+        <p class="descripcion">
+            Ciclo de vida de una incidencia no planificada, desde que se reporta hasta que queda en el historial.
+        </p>
+        <button onclick="descargar('tickets')">Descargar PNG</button>
+<pre class="mermaid">
+flowchart TD
+    A([Usuario detecta una falla]) --> B[/Reportar falla:<br/>equipo, título, descripción, prioridad/]
+    B --> C{¿Equipo y título<br/>completos?}
+    C -- No --> B
+    C -- Sí --> D[Guardar ticket con estado Abierto]
+    D --> E[Notificación en el Dashboard:<br/>ticket sin asignar]
+    E --> F{¿Quién lo asigna?}
+    F -- Técnico --> G[Técnico toma el ticket]
+    F -- Administrador --> H[Admin asigna a un técnico]
+    G --> I[Estado: En proceso]
+    H --> I
+    I --> J[Técnico revisa y repara el equipo]
+    J --> K[/Escribe la solución aplicada/]
+    K --> L{¿Solución escrita?}
+    L -- No --> K
+    L -- Sí --> M[Estado: Cerrado<br/>se guarda fecha de cierre]
+    M --> N[Se registra en el Historial de mantenimiento]
+    N --> O[El usuario ve su ticket cerrado]
+    O --> P([Fin])
+</pre>
+    </section>
+
+    <script type="module">
+        import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs";
+
+        // ?d=clases|login|tickets muestra solo ese diagrama (para capturas)
+        const solo = new URLSearchParams(location.search).get("d");
+        if (solo) {
+            document.body.classList.add("captura");
+            document.querySelectorAll("section").forEach(s => { if (s.id !== solo) s.remove(); });
+        }
+
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: "base",
+            htmlLabels: false,
+            flowchart: { htmlLabels: false, curve: "basis" },
+            themeVariables: {
+                primaryColor: "#E0F2FE",
+                primaryBorderColor: "#328CC1",
+                primaryTextColor: "#0B3C5D",
+                lineColor: "#0B3C5D",
+                fontFamily: "Arial, sans-serif"
+            }
+        });
+        await mermaid.run();
+        document.body.dataset.listo = "1";
+
+        // Convierte el SVG del diagrama en PNG para pegarlo en el documento
+        window.descargar = function(id) {
+            const svg = document.querySelector(`#${id} svg`);
+            const { width, height } = svg.getBoundingClientRect();
+            const escala = 2;
+            const datos = new XMLSerializer().serializeToString(svg);
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = width * escala;
+                canvas.height = height * escala;
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const a = document.createElement("a");
+                a.download = `techcare-${id}.png`;
+                a.href = canvas.toDataURL("image/png");
+                a.click();
+            };
+            img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(datos);
+        };
+    </script>
+</body>
+</html>

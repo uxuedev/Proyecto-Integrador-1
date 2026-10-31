@@ -4,18 +4,20 @@
     <meta charset="UTF-8">
     <title>Dashboard - Sistema de Mantenimiento</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="sidebar">
             <h3>TechCare - Menú</h3>
-            <a></a>
             <a href="dashboard.html" style="background: var(--secondary);">Dashboard</a>
             <a href="equipos.html">Equipos</a>
             <a href="citas.html">Citas</a>
             <a href="historial.html">Historial</a>
             <a href="preventivo.html">Preventivo</a>
             <a href="reportes.html">Reportes</a>
+            <a href="tickets.html">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
             <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
         </div>
         <div class="main">
@@ -37,8 +39,34 @@
                         <p>Total de Servicios</p>
                         <strong id="totalCitas">Cargando...</strong>
                     </div>
+
+                    <div class="stat-card">
+                        <p id="tituloTickets">Tickets abiertos</p>
+                        <strong id="ticketsAbiertos">Cargando...</strong>
+                    </div>
                 </div>
+
+                <!-- Notificaciones automáticas -->
                 <div class="panel-citas">
+                    <h3>Notificaciones <span id="contadorNotif" class="contador-notif"></span></h3>
+                    <div id="notificaciones">
+                        <p>Cargando notificaciones...</p>
+                    </div>
+                </div>
+
+                <!-- Gráficas -->
+                <div class="graficas-grid">
+                    <div class="panel-citas">
+                        <h3>Equipos por estado</h3>
+                        <div class="grafica-contenedor"><canvas id="graficaEquipos"></canvas></div>
+                    </div>
+                    <div class="panel-citas">
+                        <h3 id="tituloGraficaTickets">Tickets por estado</h3>
+                        <div class="grafica-contenedor"><canvas id="graficaTickets"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="panel-citas" data-permiso="citas">
                     <h3>Próximas citas pendientes</h3>
                     <div id="proximasCitas">
                         <p>Cargando citas...</p>
@@ -49,106 +77,173 @@
     </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, collection, getDocs, query, where } 
+import { db } from "./firebase.js";
+import { requerirSesion, puede, esc, ROLES } from "./sesion.js";
+import { collection, getDocs, query, where }
 from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// CONFIG
-const firebaseConfig = {
-    apiKey: "AIzaSyDnEejftP3iYoTSAzYvDSdwHdYTEUIV8s4",
-    authDomain: "proyecto-integrador-77c49.firebaseapp.com",
-    projectId: "proyecto-integrador-77c49",
-    storageBucket: "proyecto-integrador-77c49.firebasestorage.app",
-    messagingSenderId: "1074040277954",
-    appId: "1:1074040277954:web:26167a594d0c8159d6245b"
-};
+const DIAS_AVISO = 3;
 
+function sumarDias(fechaISO, dias) {
+    const f = new Date(fechaISO + "T00:00:00");
+    f.setDate(f.getDate() + dias);
+    return f.toISOString().split("T")[0];
+}
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+async function leer(nombre) {
+    const snap = await getDocs(collection(db, nombre));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
+// Genera avisos de citas/preventivos vencidos, de hoy o próximos, y de tickets
+function construirNotificaciones({ citas, preventivos, tickets, equipos, perfil, hoy }) {
+    const avisos = [];
+    const limite = sumarDias(hoy, DIAS_AVISO);
 
-async function cargarDashboard() {
+    if (puede("citas") || puede("preventivo")) {
+        const servicios = [
+            ...(puede("citas") ? citas.map(c => ({ ...c, origen: "Cita" })) : []),
+            ...(puede("preventivo") ? preventivos.map(p => ({ ...p, origen: "Preventivo" })) : [])
+        ];
+        servicios
+            .filter(s => (s.estado || "").toLowerCase() === "pendiente" && s.fecha)
+            .forEach(s => {
+                const equipo = s.equipo_nombre || "Equipo sin nombre";
+                if (s.fecha < hoy) {
+                    avisos.push({ nivel: "alta", orden: 0, texto: `${s.origen} vencida: ${equipo} (era el ${s.fecha})` });
+                } else if (s.fecha === hoy) {
+                    avisos.push({ nivel: "media", orden: 1, texto: `${s.origen} para hoy: ${equipo}` });
+                } else if (s.fecha <= limite) {
+                    avisos.push({ nivel: "baja", orden: 2, texto: `${s.origen} próxima: ${equipo} el ${s.fecha}` });
+                }
+            });
+    }
+
+    if (puede("tickets.ver_todos")) {
+        tickets
+            .filter(t => t.estado === "Abierto" && !t.tecnico_id)
+            .forEach(t => avisos.push({
+                nivel: t.prioridad === "Alta" ? "alta" : "media",
+                orden: t.prioridad === "Alta" ? 0 : 1,
+                texto: `Ticket sin asignar (${t.prioridad}): ${t.titulo} — ${t.equipo_nombre || ""}`
+            }));
+        tickets
+            .filter(t => t.estado === "En proceso" && t.tecnico_id === perfil.id)
+            .forEach(t => avisos.push({ nivel: "baja", orden: 2, texto: `Tienes asignado el ticket: ${t.titulo}` }));
+    } else {
+        tickets
+            .filter(t => t.estado !== "Cerrado")
+            .forEach(t => avisos.push({
+                nivel: "baja", orden: 2,
+                texto: `Tu ticket "${t.titulo}" está ${t.estado.toLowerCase()}${t.tecnico_nombre ? " con " + t.tecnico_nombre : ""}`
+            }));
+    }
+
+    if (puede("equipos.editar")) {
+        const enReparacion = equipos.filter(e => e.estado === "En reparación").length;
+        if (enReparacion > 0) {
+            avisos.push({ nivel: "media", orden: 1, texto: `${enReparacion} equipo(s) en reparación` });
+        }
+    }
+
+    return avisos.sort((a, b) => a.orden - b.orden);
+}
+
+function mostrarNotificaciones(avisos) {
+    const contenedor = document.getElementById("notificaciones");
+    document.getElementById("contadorNotif").textContent = avisos.length || "";
+    if (avisos.length === 0) {
+        contenedor.innerHTML = "<p>No hay notificaciones pendientes.</p>";
+        return;
+    }
+    contenedor.innerHTML = avisos
+        .map(a => `<div class="notif notif-${a.nivel}">${esc(a.texto)}</div>`)
+        .join("");
+}
+
+function contarPor(lista, campo, categorias) {
+    return categorias.map(cat => lista.filter(x => x[campo] === cat).length);
+}
+
+function graficar(id, tipo, etiquetas, valores, colores) {
+    if (!window.Chart) return;
+    new Chart(document.getElementById(id), {
+        type: tipo,
+        data: { labels: etiquetas, datasets: [{ data: valores, backgroundColor: colores, borderWidth: 1 }] },
+        options: {
+            maintainAspectRatio: false,
+            plugins: { legend: { display: tipo === "doughnut", position: "bottom" } },
+            scales: tipo === "bar" ? { y: { beginAtZero: true, ticks: { precision: 0 } } } : {}
+        }
+    });
+}
+
+async function cargarDashboard(perfil) {
+    document.getElementById("bienvenidaUsuario").textContent = `Bienvenido, ${perfil.nombre} (${ROLES[perfil.rol]})`;
 
     try {
-        // 🔹 0. NOMBRE DEL USUARIO
-        const usuariosSnap = await getDocs(collection(db, "usuarios"));
+        const hoy = new Date().toISOString().split("T")[0];
+        const verServicios = puede("citas") || puede("preventivo");
 
-        if (!usuariosSnap.empty) {
-            const usuario = usuariosSnap.docs[0].data();
-            document.getElementById("bienvenidaUsuario").textContent = `Bienvenido, ${usuario.nombre}`;
-        } else {
-            document.getElementById("bienvenidaUsuario").textContent = "Bienvenido";
-        }
+        // Un usuario normal solo puede ver sus propios tickets
+        const ticketsQuery = puede("tickets.ver_todos")
+            ? collection(db, "tickets")
+            : query(collection(db, "tickets"), where("creado_por_id", "==", perfil.id));
+
+        const [equipos, citas, preventivos, ticketsSnap] = await Promise.all([
+            leer("equipos"),
+            verServicios ? leer("citas") : [],
+            verServicios ? leer("mantenimiento_preventido") : [],
+            getDocs(ticketsQuery)
+        ]);
+        const tickets = ticketsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
         //TOTAL EQUIPOS
-        const equiposSnap = await getDocs(collection(db, "equipos"));
-        document.getElementById("totalEquipos").textContent = equiposSnap.size || 0;
+        document.getElementById("totalEquipos").textContent = equipos.length;
 
         //CITAS Y PREVENTIVOS DE HOY
-        const hoy = new Date().toISOString().split("T")[0];
+        const totalHoy = [...citas, ...preventivos].filter(s => s.fecha === hoy).length;
+        document.getElementById("citasHoy").textContent = totalHoy;
 
-        const citasHoyQuery = query(
-            collection(db, "citas"),
-            where("fecha", "==", hoy)
-        );
+        //TOTAL DE CITAS Y PREVENTIVOS
+        document.getElementById("totalCitas").textContent = citas.length + preventivos.length;
 
-        const preventivosHoyQuery = query(
-            collection(db, "mantenimiento_preventido"),
-            where("fecha", "==", hoy)
-        );
+        //TICKETS ABIERTOS
+        if (!puede("tickets.ver_todos")) {
+            document.getElementById("tituloTickets").textContent = "Mis tickets abiertos";
+            document.getElementById("tituloGraficaTickets").textContent = "Mis tickets por estado";
+        }
+        document.getElementById("ticketsAbiertos").textContent = tickets.filter(t => t.estado !== "Cerrado").length;
 
-        const citasHoySnap = await getDocs(citasHoyQuery);
-        const preventivosHoySnap = await getDocs(preventivosHoyQuery);
+        //NOTIFICACIONES
+        mostrarNotificaciones(construirNotificaciones({ citas, preventivos, tickets, equipos, perfil, hoy }));
 
-        const totalHoy = citasHoySnap.size + preventivosHoySnap.size;
+        //GRÁFICAS
+        const estadosEquipo = ["Activo", "Inactivo", "En reparación"];
+        graficar("graficaEquipos", "doughnut", estadosEquipo,
+            contarPor(equipos, "estado", estadosEquipo), ["#22c55e", "#9ca3af", "#f59e0b"]);
 
-        document.getElementById("citasHoy").textContent = totalHoy || 0;
+        const estadosTicket = ["Abierto", "En proceso", "Cerrado"];
+        graficar("graficaTickets", "bar", estadosTicket,
+            contarPor(tickets, "estado", estadosTicket), ["#ef4444", "#328CC1", "#22c55e"]);
 
-        //3. TOTAL DE CITAS Y PREVENTIVOS
-        const totalCitasSnap = await getDocs(collection(db, "citas"));
-        const totalPreventivosSnap = await getDocs(collection(db, "mantenimiento_preventido"));
-
-        const totalServicios = totalCitasSnap.size + totalPreventivosSnap.size;
-
-        document.getElementById("totalCitas").textContent = totalServicios || 0;
-
-        //4. PRÓXIMAS 3 CITAS PENDIENTES
+        //PRÓXIMAS 3 CITAS PENDIENTES
         const contenedorCitas = document.getElementById("proximasCitas");
-        contenedorCitas.innerHTML = "<p>Cargando citas...</p>";
+        if (!contenedorCitas) return;
 
-        const citasPendientesSnap = await getDocs(collection(db, "citas"));
-
-        const proximasCitas = [];
-
-        citasPendientesSnap.forEach((doc) => {
-            const cita = doc.data();
-
-            const estado = (cita.estado || "").toLowerCase();
-            const fecha = cita.fecha || "";
-
-            if (estado === "pendiente" && fecha >= hoy) {
-                proximasCitas.push(cita);
-            }
-        });
-
-        proximasCitas.sort((a, b) => {
-            return String(a.fecha).localeCompare(String(b.fecha));
-        });
-
-        const tresCitas = proximasCitas.slice(0, 3);
+        const tresCitas = citas
+            .filter(c => (c.estado || "").toLowerCase() === "pendiente" && (c.fecha || "") >= hoy)
+            .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
+            .slice(0, 3);
 
         if (tresCitas.length > 0) {
-            contenedorCitas.innerHTML = "";
-
-            tresCitas.forEach((cita) => {
-                contenedorCitas.innerHTML += `
-                    <div class="cita-item">
-                        <strong>${cita.equipo_nombre || "Equipo sin nombre"}</strong>
-                        <span>${cita.fecha || "Sin fecha"}</span>
-                        <small>${cita.estado || "pendiente"}</small>
-                    </div>
-                `;
-            });
+            contenedorCitas.innerHTML = tresCitas.map(cita => `
+                <div class="cita-item">
+                    <strong>${esc(cita.equipo_nombre || "Equipo sin nombre")}</strong>
+                    <span>${esc(cita.fecha || "Sin fecha")}</span>
+                    <small>${esc(cita.estado || "pendiente")}</small>
+                </div>
+            `).join("");
         } else {
             contenedorCitas.innerHTML = "<p>No hay citas pendientes próximas.</p>";
         }
@@ -159,11 +254,13 @@ async function cargarDashboard() {
         document.getElementById("totalEquipos").textContent = 0;
         document.getElementById("citasHoy").textContent = 0;
         document.getElementById("totalCitas").textContent = 0;
+        document.getElementById("ticketsAbiertos").textContent = 0;
+        document.getElementById("notificaciones").innerHTML = "<p>No se pudieron cargar las notificaciones.</p>";
     }
 }
 
-cargarDashboard();
+requerirSesion().then(cargarDashboard);
 </script>
-    
+
 </body>
 </html>
