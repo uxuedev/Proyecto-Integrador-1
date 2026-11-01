@@ -125,7 +125,7 @@
 
     <script type="module">
         import { db } from "./firebase.js";
-        import { requerirSesion, puede, esc } from "./sesion.js";
+        import { requerirSesion, puede, esc, fechaLocal } from "./sesion.js";
         import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
         from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
@@ -257,7 +257,7 @@
             await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado, falla, diagnostico });
 
             if (estadoAnterior === "En reparación" && estado === "Activo") {
-                const fecha = new Date().toISOString().split("T")[0];
+                const fecha = fechaLocal();
                 await addDoc(collection(db, "historial"), {
                     equipo: nombre,
                     falla: falla || "No especificada",

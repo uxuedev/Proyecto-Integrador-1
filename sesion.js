@@ -45,6 +45,13 @@ export function perfilActual() {
     return perfil;
 }
 
+// Fecha local en formato AAAA-MM-DD. toISOString() usa UTC y en México cambia de día desde las 6 pm
+export function fechaLocal(fecha = new Date()) {
+    const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+    const dia = String(fecha.getDate()).padStart(2, "0");
+    return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
 // Escapa texto antes de meterlo en innerHTML
 export function esc(texto) {
     return String(texto ?? "").replace(/[&<>"']/g, c => ({

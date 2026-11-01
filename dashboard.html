@@ -78,7 +78,7 @@
 
 <script type="module">
 import { db } from "./firebase.js";
-import { requerirSesion, puede, esc, ROLES } from "./sesion.js";
+import { requerirSesion, puede, esc, ROLES, fechaLocal } from "./sesion.js";
 import { collection, getDocs, query, where }
 from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
@@ -87,7 +87,7 @@ const DIAS_AVISO = 3;
 function sumarDias(fechaISO, dias) {
     const f = new Date(fechaISO + "T00:00:00");
     f.setDate(f.getDate() + dias);
-    return f.toISOString().split("T")[0];
+    return fechaLocal(f);
 }
 
 async function leer(nombre) {
@@ -182,7 +182,7 @@ async function cargarDashboard(perfil) {
     document.getElementById("bienvenidaUsuario").textContent = `Bienvenido, ${perfil.nombre} (${ROLES[perfil.rol]})`;
 
     try {
-        const hoy = new Date().toISOString().split("T")[0];
+        const hoy = fechaLocal();
         const verServicios = puede("citas") || puede("preventivo");
 
         // Un usuario normal solo puede ver sus propios tickets

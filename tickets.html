@@ -119,7 +119,7 @@
 
     <script type="module">
         import { db } from "./firebase.js";
-        import { requerirSesion, puede, esc } from "./sesion.js";
+        import { requerirSesion, puede, esc, fechaLocal } from "./sesion.js";
         import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where }
         from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
@@ -129,7 +129,7 @@
         let tecnicos = [];
         let ticketAbierto = null;
 
-        const hoy = () => new Date().toISOString().split("T")[0];
+        const hoy = () => fechaLocal();
         const claseEstado = estado => "estado-" + estado.replace(/\s+/g, "-").toLowerCase();
 
         async function cargarEquipos() {
