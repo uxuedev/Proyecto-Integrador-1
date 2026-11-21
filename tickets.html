@@ -45,13 +45,10 @@
 
                 <!-- Filtros combinados -->
                 <div class="filtros-equipos">
-                    <input type="search" id="buscarTicket" placeholder="Buscar por título o equipo">
+                    <input type="search" id="buscarTicket" placeholder="Buscar por folio, título o equipo">
                     <label for="filtroEstado">Estado:</label>
                     <select id="filtroEstado">
                         <option value="todos">Todos</option>
-                        <option value="Abierto">Abierto</option>
-                        <option value="En proceso">En proceso</option>
-                        <option value="Cerrado">Cerrado</option>
                     </select>
                     <label for="filtroPrioridad">Prioridad:</label>
                     <select id="filtroPrioridad">
@@ -73,6 +70,7 @@
 
                 <table>
                     <tr>
+                        <th>Folio</th>
                         <th>Fecha</th>
                         <th>Equipo</th>
                         <th>Título</th>
@@ -82,29 +80,50 @@
                         <th>Acciones</th>
                     </tr>
                     <tbody id="tablaTickets">
-                        <tr><td colspan="7">Cargando...</td></tr>
+                        <tr><td colspan="8">Cargando...</td></tr>
                     </tbody>
                 </table>
 
                 <!-- Modal detalle / atención del ticket -->
                 <div id="modalTicket" class="modal">
-                    <div class="modal-contenido">
-                        <h3 id="detTitulo"></h3>
+                    <div class="modal-contenido modal-ancho">
+                        <h3><span id="detFolio" class="folio"></span> <span id="detTitulo"></span></h3>
+                        <div id="detLinea" class="linea-estados"></div>
                         <p><strong>Equipo:</strong> <span id="detEquipo"></span></p>
                         <p><strong>Reportado por:</strong> <span id="detCreador"></span> el <span id="detFecha"></span></p>
-                        <p><strong>Prioridad:</strong> <span id="detPrioridad"></span> · <strong>Estado:</strong> <span id="detEstado"></span></p>
+                        <p><strong>Técnico asignado:</strong> <span id="detTecnico"></span></p>
+                        <p>
+                            <strong>Prioridad:</strong> <span id="detPrioridad"></span>
+                            <span id="bloquePrioridad" data-permiso="tickets.atender">
+                                <select id="cambiarPrioridad" style="padding: 4px;">
+                                    <option value="Alta">Alta</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Baja">Baja</option>
+                                </select>
+                                <button onclick="guardarPrioridad()">Cambiar</button>
+                            </span>
+                        </p>
                         <p><strong>Descripción:</strong><br><span id="detDescripcion"></span></p>
+                        <p id="detDiagnosticoBloque"><strong>Diagnóstico:</strong><br><span id="detDiagnostico"></span></p>
                         <p id="detSolucionBloque"><strong>Solución:</strong><br><span id="detSolucion"></span></p>
 
-                        <div id="bloqueAsignar" data-permiso="tickets.asignar">
+                        <div id="bloqueAsignar" data-permiso="tickets.asignar" class="bloque-accion">
                             <label for="asignarTecnico"><strong>Asignar a:</strong></label>
                             <select id="asignarTecnico" style="padding: 6px;"></select>
                             <button class="btn" onclick="asignarTicket()">Asignar</button>
                         </div>
 
-                        <div id="bloqueCerrar">
-                            <textarea id="solucion" placeholder="Describe la solución aplicada" rows="3" style="margin: 10px 0 5px; padding: 8px; width: 100%;"></textarea>
-                            <button class="btn" onclick="cerrarTicket()">Cerrar ticket</button>
+                        <!-- Atención: cambia según el estado actual del ticket -->
+                        <div id="bloqueAvance" class="bloque-accion">
+                            <textarea id="textoAvance" rows="3" style="margin: 0 0 5px; padding: 8px; width: 100%;"></textarea>
+                            <button class="btn" id="btnAvance" onclick="avanzarTicket()"></button>
+                        </div>
+
+                        <div class="comentarios">
+                            <h4>Comentarios</h4>
+                            <div id="listaComentarios"></div>
+                            <textarea id="nuevoComentario" placeholder="Escribe un comentario" rows="2" style="padding: 8px; width: 100%;"></textarea>
+                            <button onclick="agregarComentario()">Agregar comentario</button>
                         </div>
                         <p id="mensajeModal" style="color: red;"></p>
 
@@ -119,8 +138,8 @@
 
     <script type="module">
         import { db } from "./firebase.js";
-        import { requerirSesion, puede, esc, fechaLocal } from "./sesion.js";
-        import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where }
+        import { requerirSesion, puede, esc, fechaLocal, ESTADOS_TICKET, estadoTicket } from "./sesion.js";
+        import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, where, arrayUnion }
         from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
         let perfil = null;
@@ -131,6 +150,14 @@
 
         const hoy = () => fechaLocal();
         const claseEstado = estado => "estado-" + estado.replace(/\s+/g, "-").toLowerCase();
+        const folio = id => "TK-" + id.slice(0, 6).toUpperCase();
+
+        // Qué hace el técnico en cada estado (CU-03): siguiente estado y dato que debe registrar
+        const AVANCE = {
+            "Asignada": { siguiente: "En diagnóstico", boton: "Iniciar diagnóstico" },
+            "En diagnóstico": { siguiente: "En reparación", boton: "Guardar diagnóstico y pasar a reparación", campo: "diagnostico", texto: "Describe el diagnóstico del equipo" },
+            "En reparación": { siguiente: "Resuelta", boton: "Registrar solución y resolver", campo: "solucion", texto: "Describe la solución aplicada" }
+        };
 
         async function cargarEquipos() {
             const select = document.getElementById("equipo");
@@ -151,7 +178,7 @@
             document.getElementById("filtroTecnico").innerHTML +=
                 `<option value="${perfil.id}">Asignados a mí</option>` + opciones;
             const asignar = document.getElementById("asignarTecnico");
-            if (asignar) asignar.innerHTML = opciones;
+            if (asignar) asignar.innerHTML = `<option value="">Selecciona un técnico</option>` + opciones;
         }
 
         async function cargarTickets() {
@@ -162,13 +189,18 @@
             const snap = await getDocs(fuente);
             tickets = snap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
+                .map(t => ({ ...t, estado: estadoTicket(t) }))
                 .sort((a, b) => String(b.fecha_creacion).localeCompare(String(a.fecha_creacion)));
             renderTickets();
+            if (ticketAbierto) {
+                const actualizado = tickets.find(t => t.id === ticketAbierto.id);
+                if (actualizado) verTicket(actualizado.id);
+            }
         }
 
         function accionesDe(t) {
             const botones = [`<button onclick="verTicket('${t.id}')">Ver</button>`];
-            if (puede("tickets.atender") && t.estado === "Abierto" && !t.tecnico_id) {
+            if (puede("tickets.atender") && t.estado === "Reportada" && !t.tecnico_id) {
                 botones.push(`<button class="btn" onclick="tomarTicket('${t.id}')">Tomar</button>`);
             }
             if (puede("tickets.eliminar")) {
@@ -190,22 +222,23 @@
                 if (prioridad !== "todos" && t.prioridad !== prioridad) return false;
                 if (tecnico === "sin_asignar" && t.tecnico_id) return false;
                 if (tecnico !== "todos" && tecnico !== "sin_asignar" && t.tecnico_id !== tecnico) return false;
-                if (texto && !`${t.titulo} ${t.equipo_nombre}`.toLowerCase().includes(texto)) return false;
+                if (texto && !`${folio(t.id)} ${t.titulo} ${t.equipo_nombre}`.toLowerCase().includes(texto)) return false;
                 return true;
             });
 
             document.getElementById("contadorTickets").textContent = `${filtrados.length} de ${tickets.length} tickets`;
 
             if (tickets.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='7'>No hay tickets registrados.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='8'>No hay tickets registrados.</td></tr>";
                 return;
             }
             if (filtrados.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='7'>No hay tickets con esos filtros.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='8'>No hay tickets con esos filtros.</td></tr>";
                 return;
             }
 
             tbody.innerHTML = filtrados.map(t => `<tr>
+                <td class="folio">${folio(t.id)}</td>
                 <td>${esc(t.fecha_creacion)}</td>
                 <td>${esc(t.equipo_nombre)}</td>
                 <td>${esc(t.titulo)}</td>
@@ -222,19 +255,24 @@
             const descripcion = document.getElementById("descripcion").value.trim();
             const prioridad = document.getElementById("prioridad").value;
             const mensaje = document.getElementById("mensajeTicket");
+            const equipo = equipos.find(e => e.id === equipoId);
 
-            if (!equipoId || !titulo) {
+            // Validaciones de CP-02 y CP-03: campos obligatorios y equipo existente
+            let error = null;
+            if (!equipo) error = "Selecciona un equipo registrado.";
+            else if (!titulo) error = "Escribe un título para el ticket.";
+            else if (!descripcion) error = "Describe el problema del equipo.";
+            if (error) {
                 mensaje.style.color = "red";
-                mensaje.textContent = "Selecciona un equipo y escribe un título.";
+                mensaje.textContent = error;
                 return;
             }
 
-            const equipo = equipos.find(e => e.id === equipoId);
-            await addDoc(collection(db, "tickets"), {
+            const ref = await addDoc(collection(db, "tickets"), {
                 titulo,
                 descripcion,
                 prioridad,
-                estado: "Abierto",
+                estado: "Reportada",
                 equipo_id: equipoId,
                 equipo_nombre: equipo.nombre,
                 equipo_tipo: equipo.tipo || "",
@@ -244,23 +282,25 @@
                 tecnico_nombre: "",
                 fecha_creacion: hoy(),
                 fecha_cierre: "",
-                solucion: ""
+                diagnostico: "",
+                solucion: "",
+                comentarios: []
             });
 
             mensaje.style.color = "green";
-            mensaje.textContent = "Ticket enviado. Un técnico lo atenderá pronto.";
+            mensaje.textContent = `Ticket ${folio(ref.id)} registrado. Un técnico lo atenderá pronto.`;
             document.getElementById("equipo").value = "";
             document.getElementById("titulo").value = "";
             document.getElementById("descripcion").value = "";
             cargarTickets();
         }
 
-        // El técnico se asigna el ticket y pasa a "En proceso"
+        // El técnico se asigna el ticket y pasa a "Asignada"
         window.tomarTicket = async function(id) {
             await updateDoc(doc(db, "tickets", id), {
                 tecnico_id: perfil.id,
                 tecnico_nombre: perfil.nombre,
-                estado: "En proceso"
+                estado: "Asignada"
             });
             cargarTickets();
         }
@@ -268,39 +308,64 @@
         window.asignarTicket = async function() {
             const tecnicoId = document.getElementById("asignarTecnico").value;
             const tecnico = tecnicos.find(t => t.id === tecnicoId);
-            if (!tecnico) return;
-            await updateDoc(doc(db, "tickets", ticketAbierto.id), {
-                tecnico_id: tecnico.id,
-                tecnico_nombre: tecnico.nombre,
-                estado: ticketAbierto.estado === "Cerrado" ? "Cerrado" : "En proceso"
-            });
-            cerrarModal();
-            cargarTickets();
-        }
-
-        // Al cerrar, el ticket queda registrado en el historial de mantenimiento
-        window.cerrarTicket = async function() {
-            const solucion = document.getElementById("solucion").value.trim();
-            if (!solucion) {
-                document.getElementById("mensajeModal").textContent = "Describe la solución antes de cerrar.";
+            if (!tecnico) {
+                document.getElementById("mensajeModal").textContent = "Selecciona un técnico válido para asignar el ticket.";
                 return;
             }
             const t = ticketAbierto;
             await updateDoc(doc(db, "tickets", t.id), {
-                estado: "Cerrado",
-                solucion,
-                fecha_cierre: hoy(),
-                tecnico_id: t.tecnico_id || perfil.id,
-                tecnico_nombre: t.tecnico_nombre || perfil.nombre
+                tecnico_id: tecnico.id,
+                tecnico_nombre: tecnico.nombre,
+                estado: t.estado === "Reportada" ? "Asignada" : t.estado
             });
-            await addDoc(collection(db, "historial"), {
-                equipo: t.equipo_nombre,
-                falla: t.titulo,
-                diagnostico: solucion,
-                fecha: hoy(),
-                tipo: t.equipo_tipo || ""
+            cargarTickets();
+        }
+
+        window.guardarPrioridad = async function() {
+            const prioridad = document.getElementById("cambiarPrioridad").value;
+            await updateDoc(doc(db, "tickets", ticketAbierto.id), { prioridad });
+            cargarTickets();
+        }
+
+        // Avanza el ticket al siguiente estado; al resolverse queda registrado en el historial
+        window.avanzarTicket = async function() {
+            const t = ticketAbierto;
+            const paso = AVANCE[t.estado];
+            if (!paso) return;
+            const texto = document.getElementById("textoAvance").value.trim();
+            if (paso.campo && !texto) {
+                document.getElementById("mensajeModal").textContent = paso.campo === "diagnostico"
+                    ? "Describe el diagnóstico antes de continuar."
+                    : "Describe la solución antes de resolver el ticket.";
+                return;
+            }
+
+            const cambios = { estado: paso.siguiente };
+            if (paso.campo) cambios[paso.campo] = texto;
+            if (paso.siguiente === "Resuelta") cambios.fecha_cierre = hoy();
+            await updateDoc(doc(db, "tickets", t.id), cambios);
+
+            if (paso.siguiente === "Resuelta") {
+                await addDoc(collection(db, "historial"), {
+                    equipo: t.equipo_nombre,
+                    equipo_id: t.equipo_id,
+                    falla: t.titulo,
+                    diagnostico: `${t.diagnostico || "Sin diagnóstico"}. Solución: ${texto}`,
+                    responsable: t.tecnico_nombre || perfil.nombre,
+                    fecha: hoy(),
+                    tipo: t.equipo_tipo || ""
+                });
+            }
+            cargarTickets();
+        }
+
+        window.agregarComentario = async function() {
+            const texto = document.getElementById("nuevoComentario").value.trim();
+            if (!texto) return;
+            await updateDoc(doc(db, "tickets", ticketAbierto.id), {
+                comentarios: arrayUnion({ autor: perfil.nombre, fecha: hoy(), texto })
             });
-            cerrarModal();
+            document.getElementById("nuevoComentario").value = "";
             cargarTickets();
         }
 
@@ -310,37 +375,66 @@
             cargarTickets();
         }
 
+        function mostrar(id, visible) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = visible ? "" : "none";
+        }
+
         window.verTicket = function(id) {
             const t = tickets.find(x => x.id === id);
             ticketAbierto = t;
+            document.getElementById("detFolio").textContent = folio(t.id);
             document.getElementById("detTitulo").textContent = t.titulo;
             document.getElementById("detEquipo").textContent = t.equipo_nombre;
             document.getElementById("detCreador").textContent = t.creado_por_nombre;
             document.getElementById("detFecha").textContent = t.fecha_creacion;
+            document.getElementById("detTecnico").textContent = t.tecnico_nombre || "Sin asignar";
             document.getElementById("detPrioridad").textContent = t.prioridad;
-            document.getElementById("detEstado").textContent = t.estado;
             document.getElementById("detDescripcion").textContent = t.descripcion || "Sin descripción";
-            document.getElementById("detSolucion").textContent = t.solucion
-                ? `${t.solucion} (${t.fecha_cierre})` : "";
-            document.getElementById("detSolucionBloque").style.display = t.solucion ? "block" : "none";
+            document.getElementById("detDiagnostico").textContent = t.diagnostico || "";
+            document.getElementById("detSolucion").textContent = t.solucion ? `${t.solucion} (${t.fecha_cierre})` : "";
+            mostrar("detDiagnosticoBloque", !!t.diagnostico);
+            mostrar("detSolucionBloque", !!t.solucion);
             document.getElementById("mensajeModal").textContent = "";
-            document.getElementById("solucion").value = "";
 
-            // Puede cerrar: el técnico asignado o un administrador, si sigue abierto
-            const puedeCerrar = t.estado !== "Cerrado" && puede("tickets.atender")
-                && (t.tecnico_id === perfil.id || puede("tickets.asignar"));
-            document.getElementById("bloqueCerrar").style.display = puedeCerrar ? "block" : "none";
+            // Línea de tiempo con el estado actual resaltado
+            const actual = ESTADOS_TICKET.indexOf(t.estado);
+            document.getElementById("detLinea").innerHTML = ESTADOS_TICKET
+                .map((e, i) => `<span class="paso ${i < actual ? "hecho" : i === actual ? "actual" : ""}">${e}</span>`)
+                .join("");
 
-            const bloqueAsignar = document.getElementById("bloqueAsignar");
-            if (bloqueAsignar) {
-                bloqueAsignar.style.display = t.estado !== "Cerrado" ? "block" : "none";
-                if (t.tecnico_id) document.getElementById("asignarTecnico").value = t.tecnico_id;
+            const abierto = t.estado !== "Resuelta";
+            // El selector de prioridad no existe para el rol usuario
+            mostrar("bloquePrioridad", abierto);
+            const prioridad = document.getElementById("cambiarPrioridad");
+            if (prioridad) prioridad.value = t.prioridad;
+
+            mostrar("bloqueAsignar", abierto);
+            const asignar = document.getElementById("asignarTecnico");
+            if (asignar) asignar.value = t.tecnico_id || "";
+
+            // Avanza el técnico asignado o un administrador
+            const paso = AVANCE[t.estado];
+            const puedeAvanzar = paso && puede("tickets.atender") && (t.tecnico_id === perfil.id || puede("tickets.asignar"));
+            mostrar("bloqueAvance", puedeAvanzar);
+            if (puedeAvanzar) {
+                document.getElementById("btnAvance").textContent = paso.boton;
+                const area = document.getElementById("textoAvance");
+                area.value = "";
+                area.placeholder = paso.texto || "";
+                area.style.display = paso.campo ? "" : "none";
             }
+
+            const comentarios = t.comentarios || [];
+            document.getElementById("listaComentarios").innerHTML = comentarios.length
+                ? comentarios.map(c => `<div class="comentario"><strong>${esc(c.autor)}</strong> <small>${esc(c.fecha)}</small><br>${esc(c.texto)}</div>`).join("")
+                : "<p class='texto-ayuda'>Sin comentarios.</p>";
 
             document.getElementById("modalTicket").style.display = "flex";
         }
 
         window.cerrarModal = function() {
+            ticketAbierto = null;
             document.getElementById("modalTicket").style.display = "none";
         }
 
@@ -355,6 +449,9 @@
 
         window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
         window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
+
+        document.getElementById("filtroEstado").innerHTML +=
+            ESTADOS_TICKET.map(e => `<option value="${e}">${e}</option>`).join("");
 
         requerirSesion().then(async p => {
             perfil = p;

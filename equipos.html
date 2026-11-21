@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Equipos - Sistema de Mantenimiento</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -25,7 +26,7 @@
                 <button class="btn" onclick="mostrarFormulario()" data-permiso="equipos.agregar">Agregar Equipo</button>
 
                 <div class="filtros-equipos">
-                    <input type="search" id="buscarEquipo" placeholder="Buscar por nombre o serie">
+                    <input type="search" id="buscarEquipo" placeholder="Buscar por nombre, serie o MAC">
                     <label for="filtroTipo">Tipo:</label>
                     <select id="filtroTipo">
                         <option value="todos">Todos</option>
@@ -41,21 +42,28 @@
                         <option value="Inactivo">Inactivo</option>
                         <option value="En reparación">En reparación</option>
                     </select>
+                    <label for="filtroUsuario">Usuario:</label>
+                    <select id="filtroUsuario">
+                        <option value="todos">Todos</option>
+                        <option value="sin_asignar">Sin asignar</option>
+                    </select>
                     <button onclick="limpiarFiltros()">Limpiar</button>
                     <span id="contadorEquipos" class="contador-resultados"></span>
                 </div>
 
                 <!-- Formulario nuevo equipo -->
-                <div id="formulario" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                <div id="formulario" class="form-ticket" style="display:none; margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                     <h3>Nuevo Equipo</h3>
                     <input type="text" id="nombre" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <input type="text" id="serie" placeholder="Número de serie" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="mac" placeholder="Dirección MAC (ej. 3C:52:82:1A:4F:0B)" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <select id="tipo" style="margin: 5px 0; padding: 8px; width: 100%;">
                         <option value="Desktop">Desktop</option>
                         <option value="Laptop">Laptop</option>
                         <option value="Servidor">Servidor</option>
                         <option value="Impresora">Impresora</option>
                     </select><br>
+                    <select id="usuarioAsignado" class="select-usuarios" style="margin: 5px 0; padding: 8px; width: 100%;"></select><br>
                     <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;" onchange="toggleCamposReparacion()">
                         <option value="Activo">Activo</option>
                         <option value="Inactivo">Inactivo</option>
@@ -71,16 +79,18 @@
                 </div>
 
                 <!-- Formulario editar equipo -->
-                <div id="formEditar" style="display:none; margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                <div id="formEditar" class="form-ticket" style="display:none; margin: 15px 0; padding: 15px; background: #fff3cd; border-radius: 8px;">
                     <h3>Editar Equipo</h3>
                     <input type="text" id="editNombre" placeholder="Nombre del equipo" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <input type="text" id="editSerie" placeholder="Número de serie" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
+                    <input type="text" id="editMac" placeholder="Dirección MAC" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
                     <select id="editTipo" style="margin: 5px 0; padding: 8px; width: 100%;">
                         <option value="Desktop">Desktop</option>
                         <option value="Laptop">Laptop</option>
                         <option value="Servidor">Servidor</option>
                         <option value="Impresora">Impresora</option>
                     </select><br>
+                    <select id="editUsuarioAsignado" class="select-usuarios" style="margin: 5px 0; padding: 8px; width: 100%;"></select><br>
                     <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;" onchange="toggleCamposEditReparacion()">
                         <option value="Activo">Activo</option>
                         <option value="Inactivo">Inactivo</option>
@@ -92,15 +102,24 @@
                     </div>
                     <button class="btn" onclick="guardarEdicion()" style="margin-top: 10px;">Guardar cambios</button>
                     <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
+                    <p id="mensajeEditar" style="color: red;"></p>
                 </div>
 
-                <!-- Modal Detalles -->
-                <div id="modalDetalles" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; justify-content:center; align-items:center;">
-                    <div style="background:#fff; padding:25px; border-radius:10px; width:400px; max-width:90%;">
-                        <h3>Detalles del Equipo</h3>
+                <!-- Modal Detalles con código QR -->
+                <div id="modalDetalles" class="modal">
+                    <div class="modal-contenido">
+                        <h3 id="detNombre">Detalles del Equipo</h3>
+                        <p><strong>Serie:</strong> <span id="detSerie"></span> · <strong>MAC:</strong> <span id="detMac"></span></p>
+                        <p><strong>Usuario asignado:</strong> <span id="detUsuario"></span></p>
                         <p><strong>Falla:</strong> <span id="detFalla"></span></p>
                         <p><strong>Diagnóstico:</strong> <span id="detDiagnostico"></span></p>
+                        <div class="qr-bloque">
+                            <div id="detQR"></div>
+                            <p class="texto-ayuda">Escanea este código para abrir la ficha del equipo con su historial técnico.</p>
+                        </div>
                         <div style="text-align:right; margin-top:15px;">
+                            <button id="btnFicha">Ver ficha</button>
+                            <button onclick="imprimirQR()">Imprimir QR</button>
                             <button onclick="cerrarDetalles()">Cerrar</button>
                         </div>
                     </div>
@@ -112,11 +131,12 @@
                         <th>Nombre</th>
                         <th>Serie</th>
                         <th>Tipo</th>
+                        <th>Asignado a</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
                     <tbody id="tablaEquipos">
-                        <tr><td colspan="6">Cargando...</td></tr>
+                        <tr><td colspan="7">Cargando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -129,9 +149,12 @@
         import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
         from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
+        const FORMATO_MAC = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
+
         let equipoEditando = null;
         let estadoAnterior = null;
         let equipos = [];
+        let usuarios = [];
 
         window.toggleCamposReparacion = function() {
             const estado = document.getElementById("estado").value;
@@ -143,21 +166,35 @@
             document.getElementById("camposEditReparacion").style.display = estado === "En reparación" ? "block" : "none";
         }
 
+        // Personas a las que se puede asignar un equipo
+        async function cargarUsuarios() {
+            const snap = await getDocs(collection(db, "usuarios"));
+            usuarios = snap.docs
+                .map(d => ({ id: d.id, nombre: d.data().nombre || d.data().email }))
+                .sort((a, b) => a.nombre.localeCompare(b.nombre));
+            const opciones = usuarios.map(u => `<option value="${u.id}">${esc(u.nombre)}</option>`).join("");
+            document.querySelectorAll(".select-usuarios").forEach(s => {
+                s.innerHTML = `<option value="">Sin usuario asignado</option>${opciones}`;
+            });
+            document.getElementById("filtroUsuario").innerHTML += opciones;
+        }
+
         async function cargarEquipos() {
             const snap = await getDocs(collection(db, "equipos"));
             equipos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             renderEquipos();
         }
 
-        // Aplica búsqueda, tipo y estado al mismo tiempo
+        // Aplica búsqueda, tipo, estado y usuario asignado al mismo tiempo
         function renderEquipos() {
             const tbody = document.getElementById("tablaEquipos");
             const texto = document.getElementById("buscarEquipo").value.trim().toLowerCase();
             const filtroTipo = document.getElementById("filtroTipo").value;
             const filtroEstado = document.getElementById("filtroEstado").value;
+            const filtroUsuario = document.getElementById("filtroUsuario").value;
 
             if (equipos.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos registrados.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='7'>No hay equipos registrados.</td></tr>";
                 document.getElementById("contadorEquipos").textContent = "";
                 return;
             }
@@ -165,14 +202,16 @@
             const filtrados = equipos.filter(d => {
                 if (filtroTipo !== "todos" && d.tipo !== filtroTipo) return false;
                 if (filtroEstado !== "todos" && d.estado !== filtroEstado) return false;
-                if (texto && !`${d.nombre} ${d.serie || ""}`.toLowerCase().includes(texto)) return false;
+                if (filtroUsuario === "sin_asignar" && d.usuario_id) return false;
+                if (filtroUsuario !== "todos" && filtroUsuario !== "sin_asignar" && d.usuario_id !== filtroUsuario) return false;
+                if (texto && !`${d.nombre} ${d.serie || ""} ${d.mac || ""}`.toLowerCase().includes(texto)) return false;
                 return true;
             });
 
             document.getElementById("contadorEquipos").textContent = `${filtrados.length} de ${equipos.length} equipos`;
 
             if (filtrados.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='6'>No hay equipos con esos filtros.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='7'>No hay equipos con esos filtros.</td></tr>";
                 return;
             }
 
@@ -181,9 +220,10 @@
                 <td>${esc(d.nombre)}</td>
                 <td>${esc(d.serie || "-")}</td>
                 <td>${esc(d.tipo)}</td>
+                <td>${esc(d.usuario_nombre || "-")}</td>
                 <td><span class="estado estado-${esc((d.estado || "").replace(/\s+/g, '-').toLowerCase())}">${esc(d.estado)}</span></td>
                 <td>
-                    <button onclick="verDetalles('${d.id}')" style="margin-right:4px;">Detalles</button>
+                    <button onclick="verDetalles('${d.id}')" style="margin-right:4px;">Detalles / QR</button>
                     ${puede("equipos.editar") ? `<button onclick="abrirEdicion('${d.id}')">Editar</button>` : ""}
                     ${puede("equipos.eliminar") ? `<button onclick="eliminarEquipo('${d.id}')" style="margin-left: 5px; color: red;">Eliminar</button>` : ""}
                 </td>
@@ -194,40 +234,77 @@
             document.getElementById("buscarEquipo").value = "";
             document.getElementById("filtroTipo").value = "todos";
             document.getElementById("filtroEstado").value = "todos";
+            document.getElementById("filtroUsuario").value = "todos";
             renderEquipos();
         }
 
+        // El QR guarda la dirección de la ficha del equipo (equipo.html?id=...)
+        const urlFicha = id => new URL(`equipo.html?id=${encodeURIComponent(id)}`, location.href).href;
+
         window.verDetalles = function(id) {
             const d = equipos.find(e => e.id === id);
+            document.getElementById("detNombre").textContent = d.nombre;
+            document.getElementById("detSerie").textContent = d.serie || "-";
+            document.getElementById("detMac").textContent = d.mac || "-";
+            document.getElementById("detUsuario").textContent = d.usuario_nombre || "Sin usuario asignado";
             document.getElementById("detFalla").textContent = d.falla || "-";
             document.getElementById("detDiagnostico").textContent = d.diagnostico || "-";
+
+            const contenedorQR = document.getElementById("detQR");
+            contenedorQR.innerHTML = "";
+            if (window.QRCode) new QRCode(contenedorQR, { text: urlFicha(id), width: 160, height: 160 });
+            document.getElementById("btnFicha").onclick = () => location.href = urlFicha(id);
+
             document.getElementById("modalDetalles").style.display = "flex";
+        }
+
+        window.imprimirQR = function() {
+            const imagen = document.querySelector("#detQR img, #detQR canvas");
+            const fuente = imagen.tagName === "IMG" ? imagen.src : imagen.toDataURL();
+            const nombre = esc(document.getElementById("detNombre").textContent);
+            const ventana = window.open("", "_blank");
+            ventana.document.write(`<div style="text-align:center;font-family:Arial"><h2>${nombre}</h2><img src="${fuente}" width="240"><p>TechCare 2.0</p></div>`);
+            ventana.document.close();
+            ventana.print();
         }
 
         window.cerrarDetalles = function() {
             document.getElementById("modalDetalles").style.display = "none";
         }
 
+        // Valida los datos del formulario; devuelve un mensaje de error o null
+        function validar(nombre, mac) {
+            if (!nombre) return "Por favor ingresa el nombre del equipo.";
+            if (mac && !FORMATO_MAC.test(mac)) return "La dirección MAC no es válida. Usa el formato 3C:52:82:1A:4F:0B.";
+            return null;
+        }
+
+        function usuarioSeleccionado(idSelect) {
+            const usuario = usuarios.find(u => u.id === document.getElementById(idSelect).value);
+            return { usuario_id: usuario ? usuario.id : "", usuario_nombre: usuario ? usuario.nombre : "" };
+        }
+
         window.agregarEquipo = async function() {
             const nombre = document.getElementById("nombre").value.trim();
             const serie = document.getElementById("serie").value.trim();
+            const mac = document.getElementById("mac").value.trim().toUpperCase();
             const tipo = document.getElementById("tipo").value;
             const estado = document.getElementById("estado").value;
             const falla = document.getElementById("falla").value.trim();
             const diagnostico = document.getElementById("diagnostico").value.trim();
             const mensaje = document.getElementById("mensajeEquipo");
-            if (!nombre) {
+            const error = validar(nombre, mac);
+            if (error) {
                 mensaje.style.color = "red";
-                mensaje.textContent = "Por favor ingresa el nombre del equipo.";
+                mensaje.textContent = error;
                 return;
             }
-            await addDoc(collection(db, "equipos"), { nombre, serie, tipo, estado, falla, diagnostico });
+            await addDoc(collection(db, "equipos"), {
+                nombre, serie, mac, tipo, estado, falla, diagnostico, ...usuarioSeleccionado("usuarioAsignado")
+            });
             mensaje.style.color = "green";
             mensaje.textContent = "Equipo agregado exitosamente.";
-            document.getElementById("nombre").value = "";
-            document.getElementById("serie").value = "";
-            document.getElementById("falla").value = "";
-            document.getElementById("diagnostico").value = "";
+            ["nombre", "serie", "mac", "falla", "diagnostico", "usuarioAsignado"].forEach(id => document.getElementById(id).value = "");
             cargarEquipos();
         }
 
@@ -237,10 +314,13 @@
             estadoAnterior = d.estado;
             document.getElementById("editNombre").value = d.nombre || "";
             document.getElementById("editSerie").value = d.serie || "";
+            document.getElementById("editMac").value = d.mac || "";
             document.getElementById("editTipo").value = d.tipo;
+            document.getElementById("editUsuarioAsignado").value = d.usuario_id || "";
             document.getElementById("editEstado").value = d.estado;
             document.getElementById("editFalla").value = d.falla || "";
             document.getElementById("editDiagnostico").value = d.diagnostico || "";
+            document.getElementById("mensajeEditar").textContent = "";
             document.getElementById("camposEditReparacion").style.display = d.estado === "En reparación" ? "block" : "none";
             document.getElementById("formEditar").style.display = "block";
         }
@@ -248,18 +328,26 @@
         window.guardarEdicion = async function() {
             const nombre = document.getElementById("editNombre").value.trim();
             const serie = document.getElementById("editSerie").value.trim();
+            const mac = document.getElementById("editMac").value.trim().toUpperCase();
             const tipo = document.getElementById("editTipo").value;
             const estado = document.getElementById("editEstado").value;
             const falla = document.getElementById("editFalla").value.trim();
             const diagnostico = document.getElementById("editDiagnostico").value.trim();
-            if (!nombre) return;
+            const error = validar(nombre, mac);
+            if (error) {
+                document.getElementById("mensajeEditar").textContent = error;
+                return;
+            }
 
-            await updateDoc(doc(db, "equipos", equipoEditando), { nombre, serie, tipo, estado, falla, diagnostico });
+            await updateDoc(doc(db, "equipos", equipoEditando), {
+                nombre, serie, mac, tipo, estado, falla, diagnostico, ...usuarioSeleccionado("editUsuarioAsignado")
+            });
 
             if (estadoAnterior === "En reparación" && estado === "Activo") {
                 const fecha = fechaLocal();
                 await addDoc(collection(db, "historial"), {
                     equipo: nombre,
+                    equipo_id: equipoEditando,
                     falla: falla || "No especificada",
                     diagnostico: diagnostico || "No especificado",
                     fecha,
@@ -284,10 +372,13 @@
         window.mostrarFormulario = () => document.getElementById("formulario").style.display = "block";
         window.ocultarFormulario = () => document.getElementById("formulario").style.display = "none";
         document.getElementById("buscarEquipo").addEventListener("input", renderEquipos);
-        document.getElementById("filtroTipo").addEventListener("change", renderEquipos);
-        document.getElementById("filtroEstado").addEventListener("change", renderEquipos);
+        ["filtroTipo", "filtroEstado", "filtroUsuario"].forEach(id =>
+            document.getElementById(id).addEventListener("change", renderEquipos));
 
-        requerirSesion().then(cargarEquipos);
+        requerirSesion().then(async () => {
+            await cargarUsuarios();
+            cargarEquipos();
+        });
     </script>
 </body>
 </html>

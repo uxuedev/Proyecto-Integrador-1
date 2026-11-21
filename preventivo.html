@@ -33,6 +33,8 @@
                             <option value="">Selecciona un equipo</option>
                         </select><br>
 
+                        <select id="periodicidad" class="select-periodicidad" style="margin: 5px 0; padding: 8px; width: 100%;"></select><br>
+
                         <select id="estado" style="margin: 5px 0; padding: 8px; width: 100%;">
                             <option value="Pendiente">Pendiente</option>
                             <option value="Completada">Completada</option>
@@ -49,6 +51,8 @@
 
                         <input type="date" id="editFecha" style="margin: 5px 0; padding: 8px; width: 100%;"><br>
 
+                        <select id="editPeriodicidad" class="select-periodicidad" style="margin: 5px 0; padding: 8px; width: 100%;"></select><br>
+
                         <select id="editEstado" style="margin: 5px 0; padding: 8px; width: 100%;">
                             <option value="Pendiente">Pendiente</option>
                             <option value="Completada">Completada</option>
@@ -59,15 +63,18 @@
                         <button onclick="cerrarEdicion()" style="margin-top: 10px; margin-left: 10px;">Cancelar</button>
                     </div>
 
+                    <p id="mensajeTabla" style="color: green;"></p>
                     <table>
                         <tr>
                             <th>Fecha</th>
                             <th>Equipo</th>
+                            <th>Periodicidad</th>
+                            <th>Próximo mantenimiento</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                         <tbody id="tablaPreventivo">
-                            <tr><td colspan="4">Cargando...</td></tr>
+                            <tr><td colspan="6">Cargando...</td></tr>
                         </tbody>
                     </table>
             </div>
@@ -76,12 +83,29 @@
 
 <script type="module">
     import { db } from "./firebase.js";
-    import { requerirSesion, puede, esc } from "./sesion.js";
+    import { requerirSesion, puede, esc, fechaLocal } from "./sesion.js";
     import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc }
     from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
+    // Cada cuántos días se repite el mantenimiento (0 = una sola vez)
+    const PERIODICIDADES = { 0: "Única vez", 30: "Mensual", 90: "Trimestral", 180: "Semestral", 365: "Anual" };
+
+    let preventivos = [];
     let preventivoEditando = null;
-    let equipoEditando = null;
+
+    document.querySelectorAll(".select-periodicidad").forEach(s => {
+        s.innerHTML = Object.entries(PERIODICIDADES)
+            .map(([dias, texto]) => `<option value="${dias}">Periodicidad: ${texto}</option>`).join("");
+    });
+
+    function sumarDias(fechaISO, dias) {
+        const f = new Date(fechaISO + "T00:00:00");
+        f.setDate(f.getDate() + dias);
+        return fechaLocal(f);
+    }
+
+    // Fecha del siguiente mantenimiento según la periodicidad
+    const proximaFecha = p => Number(p.periodicidad_dias) > 0 ? sumarDias(p.fecha, Number(p.periodicidad_dias)) : "";
 
     async function cargarEquipos() {
         const select = document.getElementById("equipo");
@@ -91,34 +115,41 @@
 
         snap.forEach(docSnap => {
             const data = docSnap.data();
-            select.innerHTML += `<option value="${docSnap.id}">${data.nombre}</option>`;
+            select.innerHTML += `<option value="${docSnap.id}">${esc(data.nombre)}</option>`;
         });
     }
 
 async function cargarPreventivos() {
     const tbody = document.getElementById("tablaPreventivo");
-    tbody.innerHTML = "";
-
     const snap = await getDocs(collection(db, "mantenimiento_preventido"));
+    preventivos = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 
-    if (snap.empty) {
-        tbody.innerHTML = "<tr><td colspan='4'>No hay preventivos registrados.</td></tr>";
+    if (preventivos.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='6'>No hay preventivos registrados.</td></tr>";
         return;
     }
 
-    snap.forEach(docSnap => {
-        const d = docSnap.data();
-
-        tbody.innerHTML += `<tr>
+    const hoy = fechaLocal();
+    tbody.innerHTML = preventivos.map(d => {
+        // Un mantenimiento pendiente con fecha pasada se marca como vencido
+        const vencido = d.estado === "Pendiente" && d.fecha < hoy;
+        const estado = vencido
+            ? `<span class="estado estado-vencido">Vencido</span>`
+            : esc(d.estado);
+        return `<tr>
             <td>${esc(d.fecha)}</td>
             <td>${esc(d.equipo_nombre)}</td>
-            <td>${esc(d.estado)}</td>
+            <td>${PERIODICIDADES[Number(d.periodicidad_dias) || 0]}</td>
+            <td>${esc(proximaFecha(d) || "-")}</td>
+            <td>${estado}</td>
             <td>
-                <button onclick="abrirEdicion('${docSnap.id}', '${d.fecha}', '${d.estado}', '${d.equipo_id}')">Editar</button>
-                ${puede("preventivo.eliminar") ? `<button onclick="eliminarPreventivo('${docSnap.id}')" style="margin-left: 5px; color: red;">Eliminar</button>` : ""}
+                <button onclick="abrirEdicion('${d.id}')">Editar</button>
+                ${puede("preventivo.eliminar") ? `<button onclick="eliminarPreventivo('${d.id}')" style="margin-left: 5px; color: red;">Eliminar</button>` : ""}
             </td>
         </tr>`;
-    });
+    }).join("");
 }
 
 window.agregarPreventivo = async function() {
@@ -127,6 +158,7 @@ window.agregarPreventivo = async function() {
     const equipoId = select.value;
     const equipoNombre = select.options[select.selectedIndex].text;
     const estado = document.getElementById("estado").value;
+    const periodicidad_dias = Number(document.getElementById("periodicidad").value);
     const mensaje = document.getElementById("mensajePreventivo");
 
     if (!fecha || !equipoId) {
@@ -139,7 +171,8 @@ window.agregarPreventivo = async function() {
         fecha,
         equipo_id: equipoId,
         equipo_nombre: equipoNombre,
-        estado
+        estado,
+        periodicidad_dias
     });
 
     if (estado === "Pendiente") {
@@ -148,38 +181,58 @@ window.agregarPreventivo = async function() {
         });
     }
 
+    const proxima = periodicidad_dias > 0 ? ` Próximo mantenimiento: ${sumarDias(fecha, periodicidad_dias)}.` : "";
     mensaje.style.color = "green";
-    mensaje.textContent = "Preventivo agendado exitosamente.";
+    mensaje.textContent = "Preventivo agendado exitosamente." + proxima;
     document.getElementById("fecha").value = "";
     select.value = "";
 
     cargarPreventivos();
     }
 
-    window.abrirEdicion = function(id, fecha, estado, equipoId) {
-        preventivoEditando = id;
-        equipoEditando = equipoId;
+    window.abrirEdicion = function(id) {
+        const p = preventivos.find(x => x.id === id);
+        preventivoEditando = p;
 
-        document.getElementById("editFecha").value = fecha;
-        document.getElementById("editEstado").value = estado;
+        document.getElementById("editFecha").value = p.fecha;
+        document.getElementById("editEstado").value = p.estado;
+        document.getElementById("editPeriodicidad").value = String(Number(p.periodicidad_dias) || 0);
         document.getElementById("formEditar").style.display = "block";
     }
 
     window.guardarEdicion = async function() {
+        const p = preventivoEditando;
         const nuevaFecha = document.getElementById("editFecha").value;
         const nuevoEstado = document.getElementById("editEstado").value;
+        const periodicidad_dias = Number(document.getElementById("editPeriodicidad").value);
 
         if (!nuevaFecha) return;
 
-        await updateDoc(doc(db, "mantenimiento_preventido", preventivoEditando), {
+        await updateDoc(doc(db, "mantenimiento_preventido", p.id), {
             fecha: nuevaFecha,
-            estado: nuevoEstado
+            estado: nuevoEstado,
+            periodicidad_dias
         });
 
         if (nuevoEstado === "Pendiente") {
-            await updateDoc(doc(db, "equipos", equipoEditando), {
+            await updateDoc(doc(db, "equipos", p.equipo_id), {
                 estado: "En reparación"
             });
+        }
+
+        // Al completar un mantenimiento periódico se programa automáticamente el siguiente
+        const mensaje = document.getElementById("mensajeTabla");
+        mensaje.textContent = "";
+        if (nuevoEstado === "Completada" && p.estado !== "Completada" && periodicidad_dias > 0) {
+            const siguiente = sumarDias(nuevaFecha, periodicidad_dias);
+            await addDoc(collection(db, "mantenimiento_preventido"), {
+                fecha: siguiente,
+                equipo_id: p.equipo_id,
+                equipo_nombre: p.equipo_nombre,
+                estado: "Pendiente",
+                periodicidad_dias
+            });
+            mensaje.textContent = `Mantenimiento completado. Se programó el siguiente para el ${siguiente}.`;
         }
 
         cerrarEdicion();

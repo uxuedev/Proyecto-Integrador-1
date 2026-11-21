@@ -25,6 +25,7 @@ const PERMISOS = {
 const PAGINAS = {
     "dashboard.html": "dashboard",
     "equipos.html": "equipos.ver",
+    "equipo.html": "equipos.ver",
     "citas.html": "citas",
     "historial.html": "historial",
     "preventivo.html": "preventivo",
@@ -32,6 +33,16 @@ const PAGINAS = {
     "tickets.html": "tickets.ver",
     "usuarios.html": "usuarios"
 };
+
+// Ciclo de vida de un ticket según el diseño de casos de uso (CU-01 a CU-03)
+export const ESTADOS_TICKET = ["Reportada", "Asignada", "En diagnóstico", "En reparación", "Resuelta"];
+
+// Tickets creados con la primera versión del módulo usaban otros nombres de estado
+const ESTADOS_ANTERIORES = { "Abierto": "Reportada", "En proceso": "Asignada", "Cerrado": "Resuelta" };
+
+export function estadoTicket(ticket) {
+    return ESTADOS_ANTERIORES[ticket.estado] || ticket.estado || "Reportada";
+}
 
 let perfil = null;
 

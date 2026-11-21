@@ -78,7 +78,7 @@
 
 <script type="module">
 import { db } from "./firebase.js";
-import { requerirSesion, puede, esc, ROLES, fechaLocal } from "./sesion.js";
+import { requerirSesion, puede, esc, ROLES, fechaLocal, ESTADOS_TICKET, estadoTicket } from "./sesion.js";
 import { collection, getDocs, query, where }
 from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
@@ -102,40 +102,40 @@ function construirNotificaciones({ citas, preventivos, tickets, equipos, perfil,
 
     if (puede("citas") || puede("preventivo")) {
         const servicios = [
-            ...(puede("citas") ? citas.map(c => ({ ...c, origen: "Cita" })) : []),
-            ...(puede("preventivo") ? preventivos.map(p => ({ ...p, origen: "Preventivo" })) : [])
+            ...(puede("citas") ? citas.map(c => ({ ...c, origen: "Cita", vencido: "vencida", proximo: "próxima" })) : []),
+            ...(puede("preventivo") ? preventivos.map(p => ({ ...p, origen: "Mantenimiento preventivo", vencido: "vencido", proximo: "próximo" })) : [])
         ];
         servicios
             .filter(s => (s.estado || "").toLowerCase() === "pendiente" && s.fecha)
             .forEach(s => {
                 const equipo = s.equipo_nombre || "Equipo sin nombre";
                 if (s.fecha < hoy) {
-                    avisos.push({ nivel: "alta", orden: 0, texto: `${s.origen} vencida: ${equipo} (era el ${s.fecha})` });
+                    avisos.push({ nivel: "alta", orden: 0, texto: `${s.origen} ${s.vencido}: ${equipo} (era el ${s.fecha})` });
                 } else if (s.fecha === hoy) {
                     avisos.push({ nivel: "media", orden: 1, texto: `${s.origen} para hoy: ${equipo}` });
                 } else if (s.fecha <= limite) {
-                    avisos.push({ nivel: "baja", orden: 2, texto: `${s.origen} próxima: ${equipo} el ${s.fecha}` });
+                    avisos.push({ nivel: "baja", orden: 2, texto: `${s.origen} ${s.proximo}: ${equipo} el ${s.fecha}` });
                 }
             });
     }
 
     if (puede("tickets.ver_todos")) {
         tickets
-            .filter(t => t.estado === "Abierto" && !t.tecnico_id)
+            .filter(t => t.estado === "Reportada" && !t.tecnico_id)
             .forEach(t => avisos.push({
                 nivel: t.prioridad === "Alta" ? "alta" : "media",
                 orden: t.prioridad === "Alta" ? 0 : 1,
                 texto: `Ticket sin asignar (${t.prioridad}): ${t.titulo} — ${t.equipo_nombre || ""}`
             }));
         tickets
-            .filter(t => t.estado === "En proceso" && t.tecnico_id === perfil.id)
-            .forEach(t => avisos.push({ nivel: "baja", orden: 2, texto: `Tienes asignado el ticket: ${t.titulo}` }));
+            .filter(t => t.estado !== "Resuelta" && t.estado !== "Reportada" && t.tecnico_id === perfil.id)
+            .forEach(t => avisos.push({ nivel: "baja", orden: 2, texto: `Tienes asignado el ticket "${t.titulo}" (${t.estado})` }));
     } else {
         tickets
-            .filter(t => t.estado !== "Cerrado")
+            .filter(t => t.estado !== "Resuelta")
             .forEach(t => avisos.push({
                 nivel: "baja", orden: 2,
-                texto: `Tu ticket "${t.titulo}" está ${t.estado.toLowerCase()}${t.tecnico_nombre ? " con " + t.tecnico_nombre : ""}`
+                texto: `Tu ticket "${t.titulo}" está en estado ${t.estado}${t.tecnico_nombre ? ", atendido por " + t.tecnico_nombre : ""}`
             }));
     }
 
@@ -196,7 +196,9 @@ async function cargarDashboard(perfil) {
             verServicios ? leer("mantenimiento_preventido") : [],
             getDocs(ticketsQuery)
         ]);
-        const tickets = ticketsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const tickets = ticketsSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .map(t => ({ ...t, estado: estadoTicket(t) }));
 
         //TOTAL EQUIPOS
         document.getElementById("totalEquipos").textContent = equipos.length;
@@ -213,7 +215,7 @@ async function cargarDashboard(perfil) {
             document.getElementById("tituloTickets").textContent = "Mis tickets abiertos";
             document.getElementById("tituloGraficaTickets").textContent = "Mis tickets por estado";
         }
-        document.getElementById("ticketsAbiertos").textContent = tickets.filter(t => t.estado !== "Cerrado").length;
+        document.getElementById("ticketsAbiertos").textContent = tickets.filter(t => t.estado !== "Resuelta").length;
 
         //NOTIFICACIONES
         mostrarNotificaciones(construirNotificaciones({ citas, preventivos, tickets, equipos, perfil, hoy }));
@@ -223,9 +225,8 @@ async function cargarDashboard(perfil) {
         graficar("graficaEquipos", "doughnut", estadosEquipo,
             contarPor(equipos, "estado", estadosEquipo), ["#22c55e", "#9ca3af", "#f59e0b"]);
 
-        const estadosTicket = ["Abierto", "En proceso", "Cerrado"];
-        graficar("graficaTickets", "bar", estadosTicket,
-            contarPor(tickets, "estado", estadosTicket), ["#ef4444", "#328CC1", "#22c55e"]);
+        graficar("graficaTickets", "bar", ESTADOS_TICKET,
+            contarPor(tickets, "estado", ESTADOS_TICKET), ["#ef4444", "#8b5cf6", "#f59e0b", "#328CC1", "#22c55e"]);
 
         //PRÓXIMAS 3 CITAS PENDIENTES
         const contenedorCitas = document.getElementById("proximasCitas");

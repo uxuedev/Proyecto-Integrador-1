@@ -56,10 +56,11 @@
                         <th>Tipo</th>
                         <th>Falla</th>
                         <th>Diagnóstico</th>
+                        <th>Responsable</th>
                         <th>Fecha</th>
                     </tr>
                     <tbody id="tablaHistorial">
-                        <tr><td colspan="5">Cargando...</td></tr>
+                        <tr><td colspan="6">Cargando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -78,7 +79,7 @@
             tbody.innerHTML = "";
             const snap = await getDocs(collection(db, "historial"));
             if (snap.empty) {
-                tbody.innerHTML = "<tr><td colspan='5'>No hay registros en el historial.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='6'>No hay registros en el historial.</td></tr>";
                 return;
             }
             todosLosRegistros = [];
@@ -92,7 +93,7 @@
             const tbody = document.getElementById("tablaHistorial");
             tbody.innerHTML = "";
             if (registros.length === 0) {
-                tbody.innerHTML = "<tr><td colspan='5'>No hay registros con esos filtros.</td></tr>";
+                tbody.innerHTML = "<tr><td colspan='6'>No hay registros con esos filtros.</td></tr>";
                 return;
             }
             registros.forEach(d => {
@@ -101,6 +102,7 @@
                     <td>${esc(d.tipo || "-")}</td>
                     <td>${esc(d.falla)}</td>
                     <td>${esc(d.diagnostico)}</td>
+                    <td>${esc(d.responsable || "-")}</td>
                     <td>${esc(d.fecha)}</td>
                 </tr>`;
             });

@@ -56,7 +56,7 @@
 
     <script type="module">
         import { db } from "./firebase.js";
-        import { requerirSesion, esc } from "./sesion.js";
+        import { requerirSesion, esc, estadoTicket } from "./sesion.js";
         import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
         requerirSesion();
@@ -70,17 +70,17 @@
         };
 
         const columnas = {
-            equipos: ["nombre", "tipo", "estado"],
+            equipos: ["nombre", "serie", "mac", "tipo", "usuario_nombre", "estado"],
             citas: ["fecha", "equipo_nombre", "estado"],
-            historial: ["equipo", "falla", "diagnostico", "fecha"],
+            historial: ["equipo", "falla", "diagnostico", "responsable", "fecha"],
             preventivo: ["fecha", "equipo_nombre", "estado"],
             tickets: ["fecha_creacion", "equipo_nombre", "titulo", "prioridad", "estado", "tecnico_nombre"]
         };
 
         const encabezados = {
-            equipos: ["Nombre", "Tipo", "Estado"],
+            equipos: ["Nombre", "Serie", "MAC", "Tipo", "Usuario", "Estado"],
             citas: ["Fecha", "Equipo", "Estado"],
-            historial: ["Equipo", "Falla", "Diagnóstico", "Fecha"],
+            historial: ["Equipo", "Falla", "Diagnóstico", "Responsable", "Fecha"],
             preventivo: ["Fecha", "Equipo", "Estado"],
             tickets: ["Fecha", "Equipo", "Título", "Prioridad", "Estado", "Técnico"]
         };
@@ -93,6 +93,13 @@
             tickets: "Tickets de Soporte"
         };
 
+        // Si no hay registros el archivo se genera vacío y se avisa (CP-17)
+        function mensajeGenerado(formato, datos) {
+            return datos.length
+                ? `${formato} generado exitosamente con ${datos.length} registro(s).`
+                : `No hay registros para este reporte. Se generó un ${formato} vacío.`;
+        }
+
         async function obtenerDatos() {
             const tipo = document.getElementById("tipoReporte").value;
             const nombreColeccion = colecciones[tipo];
@@ -100,7 +107,8 @@
             const snap = await getDocs(collection(db, nombreColeccion));
 
             const datos = [];
-            snap.forEach(doc => datos.push(doc.data()));
+            // Los tickets antiguos se muestran con los nombres de estado actuales
+            snap.forEach(doc => datos.push(tipo === "tickets" ? { ...doc.data(), estado: estadoTicket(doc.data()) } : doc.data()));
 
             return {
                 tipo,
@@ -179,7 +187,7 @@
 
                 doc.save(`reporte_${tipo}.pdf`);
                 mensaje.style.color = "green";
-                mensaje.textContent = "PDF generado exitosamente.";
+                mensaje.textContent = mensajeGenerado("PDF", datos);
             } catch (e) {
                 console.error(e);
                 mensaje.style.color = "red";
@@ -202,7 +210,7 @@
                 XLSX.writeFile(wb, `reporte_${tipo}.xlsx`);
 
                 mensaje.style.color = "green";
-                mensaje.textContent = "Excel generado exitosamente.";
+                mensaje.textContent = mensajeGenerado("Excel", datos);
             } catch (e) {
                 mensaje.style.color = "red";
                 mensaje.textContent = "Error al generar el Excel.";

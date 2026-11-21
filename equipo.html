@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Ficha del Equipo - Sistema de Mantenimiento</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Menú</h3>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="equipos.html" style="background: var(--secondary);">Equipos</a>
+            <a href="citas.html">Citas</a>
+            <a href="historial.html">Historial</a>
+            <a href="preventivo.html">Preventivo</a>
+            <a href="reportes.html">Reportes</a>
+            <a href="tickets.html">Tickets</a>
+            <a href="usuarios.html">Usuarios</a>
+            <a href="index.html" style="margin-top: 20px; border-top: 1px solid var(--secondary); padding-top: 15px;">Cerrar Sesión</a>
+        </div>
+        <div class="main">
+            <div class="card">
+                <h2>Ficha del Equipo</h2>
+                <p><a href="equipos.html">← Volver a equipos</a></p>
+
+                <!-- Se muestra cuando el QR no corresponde a ningún equipo -->
+                <div id="qrInvalido" class="notif notif-alta" style="display:none;">
+                    El código QR no es válido o el equipo ya no está registrado.
+                </div>
+
+                <div id="ficha" style="display:none;">
+                    <div class="ficha-encabezado">
+                        <div>
+                            <h3 id="fNombre"></h3>
+                            <p><strong>Tipo:</strong> <span id="fTipo"></span> · <strong>Estado:</strong> <span id="fEstado"></span></p>
+                            <p><strong>Número de serie:</strong> <span id="fSerie"></span></p>
+                            <p><strong>Dirección MAC:</strong> <span id="fMac"></span></p>
+                            <p><strong>Usuario asignado:</strong> <span id="fUsuario"></span></p>
+                        </div>
+                        <div id="fQR"></div>
+                    </div>
+
+                    <div class="panel-citas" data-permiso="historial">
+                        <h3>Historial técnico</h3>
+                        <table>
+                            <tr><th>Fecha</th><th>Falla</th><th>Diagnóstico / solución</th></tr>
+                            <tbody id="fHistorial"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="panel-citas">
+                        <h3>Tickets del equipo</h3>
+                        <table>
+                            <tr><th>Fecha</th><th>Título</th><th>Prioridad</th><th>Estado</th><th>Técnico</th></tr>
+                            <tbody id="fTickets"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="panel-citas" data-permiso="preventivo">
+                        <h3>Mantenimientos y citas</h3>
+                        <table>
+                            <tr><th>Fecha</th><th>Tipo</th><th>Estado</th></tr>
+                            <tbody id="fServicios"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { db } from "./firebase.js";
+        import { requerirSesion, puede, esc, estadoTicket } from "./sesion.js";
+        import { collection, getDocs, getDoc, doc, query, where }
+        from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+        function filas(tbody, registros, columnas, vacio) {
+            const el = document.getElementById(tbody);
+            if (!el) return;
+            el.innerHTML = registros.length
+                ? registros.map(r => `<tr>${columnas.map(c => `<td>${esc(c(r))}</td>`).join("")}</tr>`).join("")
+                : `<tr><td colspan="${columnas.length}">${vacio}</td></tr>`;
+        }
+
+        const porFecha = campo => (a, b) => String(b[campo]).localeCompare(String(a[campo]));
+        const leer = async q => (await getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() }));
+
+        async function cargarFicha(perfil) {
+            const id = new URLSearchParams(location.search).get("id");
+            const snap = id ? await getDoc(doc(db, "equipos", id)) : null;
+            if (!snap || !snap.exists()) {
+                document.getElementById("qrInvalido").style.display = "block";
+                return;
+            }
+
+            const e = snap.data();
+            document.getElementById("fNombre").textContent = e.nombre;
+            document.getElementById("fTipo").textContent = e.tipo || "-";
+            document.getElementById("fEstado").textContent = e.estado || "-";
+            document.getElementById("fSerie").textContent = e.serie || "-";
+            document.getElementById("fMac").textContent = e.mac || "-";
+            document.getElementById("fUsuario").textContent = e.usuario_nombre || "Sin usuario asignado";
+            if (window.QRCode) new QRCode(document.getElementById("fQR"), { text: location.href, width: 130, height: 130 });
+            document.getElementById("ficha").style.display = "block";
+
+            // El usuario normal solo ve los tickets que él reportó
+            const ticketsQuery = puede("tickets.ver_todos")
+                ? query(collection(db, "tickets"), where("equipo_id", "==", id))
+                : query(collection(db, "tickets"), where("creado_por_id", "==", perfil.id));
+            const tickets = (await leer(ticketsQuery)).filter(t => t.equipo_id === id).sort(porFecha("fecha_creacion"));
+            filas("fTickets", tickets, [t => t.fecha_creacion, t => t.titulo, t => t.prioridad, estadoTicket, t => t.tecnico_nombre || "Sin asignar"],
+                "Este equipo no tiene tickets.");
+
+            if (puede("historial")) {
+                // Los registros anteriores solo guardaban el nombre del equipo
+                const historial = (await leer(collection(db, "historial")))
+                    .filter(h => h.equipo_id === id || (!h.equipo_id && h.equipo === e.nombre))
+                    .sort(porFecha("fecha"));
+                filas("fHistorial", historial, [h => h.fecha, h => h.falla, h => h.diagnostico], "Sin registros en el historial.");
+            }
+
+            if (puede("preventivo")) {
+                const [citas, preventivos] = await Promise.all([
+                    leer(query(collection(db, "citas"), where("equipo_id", "==", id))),
+                    leer(query(collection(db, "mantenimiento_preventido"), where("equipo_id", "==", id)))
+                ]);
+                const servicios = [
+                    ...citas.map(c => ({ ...c, origen: "Cita" })),
+                    ...preventivos.map(p => ({ ...p, origen: "Preventivo" }))
+                ].sort(porFecha("fecha"));
+                filas("fServicios", servicios, [s => s.fecha, s => s.origen, s => s.estado], "Sin mantenimientos ni citas.");
+            }
+        }
+
+        requerirSesion().then(cargarFicha);
+    </script>
+</body>
+</html>
