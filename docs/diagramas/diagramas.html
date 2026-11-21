@@ -59,14 +59,17 @@ classDiagram
         +String id
         +String nombre
         +String serie
+        +String mac
         +String tipo
         +String estado
+        +String usuario_id
         +String falla
         +String diagnostico
         +agregar()
         +editar()
         +eliminar()
-        +filtrar(texto, tipo, estado)
+        +generarQR()
+        +filtrar(texto, tipo, estado, usuario)
     }
 
     class Cita {
@@ -86,9 +89,11 @@ classDiagram
         +String equipo_id
         +String equipo_nombre
         +String estado
+        +int periodicidad_dias
         +programar()
-        +editar()
-        +eliminar()
+        +completar()
+        +proximaFecha() Date
+        +estaVencido() bool
     }
 
     class Historial {
@@ -97,6 +102,7 @@ classDiagram
         +String tipo
         +String falla
         +String diagnostico
+        +String responsable
         +Date fecha
         +registrar()
         +filtrar(desde, hasta, tipo, texto)
@@ -107,19 +113,37 @@ classDiagram
         +String titulo
         +String descripcion
         +String prioridad
-        +String estado
+        +EstadoTicket estado
         +String equipo_id
         +String creado_por_id
         +String tecnico_id
         +Date fecha_creacion
         +Date fecha_cierre
+        +String diagnostico
         +String solucion
+        +Comentario[] comentarios
         +crear()
         +tomar()
         +asignar(tecnico)
-        +cerrar(solucion)
-        +eliminar()
+        +cambiarPrioridad(prioridad)
+        +avanzarEstado(texto)
+        +agregarComentario(texto)
         +filtrar(texto, estado, prioridad, tecnico)
+    }
+
+    class EstadoTicket {
+        &lt;&lt;enumeration&gt;&gt;
+        Reportada
+        Asignada
+        En_diagnostico
+        En_reparacion
+        Resuelta
+    }
+
+    class Comentario {
+        +String autor
+        +Date fecha
+        +String texto
     }
 
     class Notificacion {
@@ -137,13 +161,16 @@ classDiagram
     }
 
     Usuario --> Rol : tiene
+    Usuario "1" --> "0..*" Equipo : tiene asignado
+    Ticket --> EstadoTicket : estado
+    Ticket "1" *-- "0..*" Comentario : contiene
     Usuario "1" --> "0..*" Ticket : reporta
     Usuario "1" --> "0..*" Ticket : atiende
     Equipo "1" --> "0..*" Ticket : recibe
     Equipo "1" --> "0..*" Cita : agenda
     Equipo "1" --> "0..*" MantenimientoPreventivo : programa
     Equipo "1" --> "0..*" Historial : acumula
-    Ticket ..> Historial : al cerrarse genera
+    Ticket ..> Historial : al resolverse genera
     Notificacion ..> Cita : revisa
     Notificacion ..> MantenimientoPreventivo : revisa
     Notificacion ..> Ticket : revisa
@@ -195,23 +222,25 @@ flowchart TD
 <pre class="mermaid">
 flowchart TD
     A([Usuario detecta una falla]) --> B[/Reportar falla:<br/>equipo, título, descripción, prioridad/]
-    B --> C{¿Equipo y título<br/>completos?}
+    B --> C{¿Equipo, título y<br/>descripción completos?}
     C -- No --> B
-    C -- Sí --> D[Guardar ticket con estado Abierto]
+    C -- Sí --> D[Guardar ticket con folio<br/>y estado Reportada]
     D --> E[Notificación en el Dashboard:<br/>ticket sin asignar]
     E --> F{¿Quién lo asigna?}
     F -- Técnico --> G[Técnico toma el ticket]
-    F -- Administrador --> H[Admin asigna a un técnico]
-    G --> I[Estado: En proceso]
+    F -- Administrador --> H[Admin asigna a un técnico<br/>y puede cambiar la prioridad]
+    G --> I[Estado: Asignada]
     H --> I
-    I --> J[Técnico revisa y repara el equipo]
-    J --> K[/Escribe la solución aplicada/]
-    K --> L{¿Solución escrita?}
-    L -- No --> K
-    L -- Sí --> M[Estado: Cerrado<br/>se guarda fecha de cierre]
-    M --> N[Se registra en el Historial de mantenimiento]
-    N --> O[El usuario ve su ticket cerrado]
-    O --> P([Fin])
+    I --> J[Técnico inicia el diagnóstico<br/>Estado: En diagnóstico]
+    J --> K[/Registra el diagnóstico/]
+    K --> L[Estado: En reparación]
+    L --> M[/Registra la solución aplicada/]
+    M --> N{¿Solución escrita?}
+    N -- No --> M
+    N -- Sí --> O[Estado: Resuelta<br/>se guarda fecha de cierre]
+    O --> P[Se registra en el Historial<br/>con el técnico responsable]
+    P --> Q[El usuario ve su ticket resuelto<br/>y los comentarios]
+    Q --> R([Fin])
 </pre>
     </section>
 
